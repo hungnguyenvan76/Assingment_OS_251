@@ -4,19 +4,44 @@
 
 int empty(struct queue_t *q)
 {
-    if (q == NULL)
+    if (!q)
         return 1;
     return (q->size == 0);
 }
 
 void enqueue(struct queue_t *q, struct pcb_t *proc)
 {
-    // Kiểm tra xem hàng đợi có đầy không 
-    if (q->size >= MAX_QUEUE_SIZE) 
+    if (!q || !proc)
         return;
-    
-    // Sửa lỗi: Truy cập mảng proc bên trong struct q, dùng q->size 
-    q->proc[q->size] = proc;
+
+    if (q->size >= MAX_QUEUE_SIZE)
+        return;
+
+    int insert_pos = q->size;
+
+#ifdef MLQ_SCHED
+    uint32_t new_prio = proc->prio;
+#else
+    uint32_t new_prio = proc->priority;
+#endif
+
+    for (int i = 0; i < q->size; i++) {
+#ifdef MLQ_SCHED
+        uint32_t ex_prio = q->proc[i]->prio;
+#else
+        uint32_t ex_prio = q->proc[i]->priority;
+#endif
+        if (new_prio < ex_prio) {
+            insert_pos = i;
+            break;
+        }
+    }
+
+    for (int i = q->size; i > insert_pos; i--) {
+        q->proc[i] = q->proc[i - 1];
+    }
+
+    q->proc[insert_pos] = proc;
     q->size++;
 }
 
@@ -25,50 +50,26 @@ struct pcb_t *dequeue(struct queue_t *q)
     if (empty(q))
         return NULL;
 
-    // Logic tìm phần tử ưu tiên cao nhất 
-    int best_index = 0;
-    
-    // Lấy phần tử đầu tiên làm mốc so sánh 
-    struct pcb_t *best_proc = q->proc[0];
+    struct pcb_t *proc = q->proc[0];
 
-    for (int i = 1; i < q->size; ++i) {
-
-        // Nếu MLQ_SCHED được định nghĩa, dùng 'prio'. Nếu không, dùng 'priority'.
-        uint32_t current_prio_val, best_prio_val;
-
-#ifdef MLQ_SCHED
-        current_prio_val = q->proc[i]->prio;
-        best_prio_val = best_proc->prio;
-#else
-        current_prio_val = q->proc[i]->priority;
-        best_prio_val = best_proc->priority;
-#endif
-
-        if (current_prio_val < best_prio_val) {
-            best_proc = q->proc[i];
-            best_index = i;
-        }
+    for (int i = 0; i < q->size - 1; i++) {
+        q->proc[i] = q->proc[i + 1];
     }
-
-    // Sau khi tìm được, xóa khỏi hàng đợi và trả về 
-    // Dồn mảng để lấp vị trí vừa lấy ra
-    for (int i = best_index; i < q->size - 1; ++i) {
-        q->proc[i] = q->proc[i+1];
-    }
-    
-    q->proc[q->size - 1] = NULL; // Xóa process thừa
+    q->proc[q->size - 1] = NULL;
     q->size--;
 
-    return best_proc;
+    return proc;
 }
 
 struct pcb_t *purgequeue(struct queue_t *q, struct pcb_t *proc)
 {
+    if (!q || !proc)
+        return NULL;
+
     int index = -1;
 
-    // Tìm vị trí của process 
-    for (int i = 0; i < q->size; ++i) {
-        if (proc == q->proc[i]) {
+    for (int i = 0; i < q->size; i++) {
+        if (q->proc[i] == proc) {
             index = i;
             break;
         }
@@ -77,11 +78,10 @@ struct pcb_t *purgequeue(struct queue_t *q, struct pcb_t *proc)
     if (index == -1)
         return NULL;
 
-    // Dồn hàng đợi 
-    for (int i = index; i < q->size - 1; ++i) {
-        q->proc[i] = q->proc[i+1];
+    for (int i = index; i < q->size - 1; i++) {
+        q->proc[i] = q->proc[i + 1];
     }
-
+    
     q->proc[q->size - 1] = NULL;
     q->size--;
 
