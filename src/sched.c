@@ -42,7 +42,7 @@ void init_scheduler(void) {
 		mlq_ready_queue[i].size = 0;
 		slot[i] = MAX_PRIO - i; 
 	}
-#endif
+#endif	
 	ready_queue.size = 0;
 	run_queue.size = 0;
 	running_list.size = 0;
@@ -63,9 +63,35 @@ struct pcb_t * get_mlq_proc(void) {
 	/*TODO: get a process from PRIORITY [ready_queue].
 	 *      It worth to protect by a mechanism.
 	 * */
+	int i;
+    for (i = 0; i < MAX_PRIO; i++) {
+		// Hàng đợi không rỗng Và còn slot để chạy
+		if (!empty(&mlq_ready_queue[i]) && slot[i] > 0) {
+			proc = dequeue(&mlq_ready_queue[i]);
+			--slot[i];
+			break;
+		}
+	}
+	// Không tìm thấy process nào (có thể do hết slot)
+	// Slot, tránh các process có độ ưu tiên thấp starving
+	if (proc == NULL) {
+		// Reset slot
+		for (int j = 0; j < MAX_PRIO; j++) {
+            slot[j] = MAX_PRIO - j; 
+        }
+		for (i = 0; i < MAX_PRIO; i++) {
+            if (!empty(&mlq_ready_queue[i]) && slot[i] > 0) {
+                proc = dequeue(&mlq_ready_queue[i]);
+                slot[i]--;
+                break;
+            }
+        }
+	}
 
 	if (proc != NULL)
 		enqueue(&running_list, proc);
+
+	pthread_mutex_unlock(&queue_lock);
 	return proc;	
 }
 
@@ -119,7 +145,12 @@ struct pcb_t * get_proc(void) {
 	 *       It worth to protect by a mechanism.
 	 * 
 	 */
-
+	if (!empty(&ready_queue)) {
+		proc = dequeue(&ready_queue);
+	}
+	else if (!empty(&run_queue)) {
+		proc = dequeue(&run_queue);
+	}
 	pthread_mutex_unlock(&queue_lock);
 
 	return proc;
