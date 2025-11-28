@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
+#include <pthread.h>
 
 #if defined(MM64)
 
@@ -115,7 +116,9 @@ int pte_set_swap(struct pcb_t *caller, addr_t pgn, int swptyp, addr_t swpoff)
   addr_t pud=0;
   addr_t pmd=0;
   addr_t pt=0;
-	
+
+	pthread_mutex_lock(&caller->mm->mm_lock);
+
   // dummy pte alloc to avoid runtime error
   pte = malloc(sizeof(addr_t));
 #ifdef MM64	
@@ -134,6 +137,8 @@ int pte_set_swap(struct pcb_t *caller, addr_t pgn, int swptyp, addr_t swpoff)
 
   SETVAL(*pte, swptyp, PAGING_PTE_SWPTYP_MASK, PAGING_PTE_SWPTYP_LOBIT);
   SETVAL(*pte, swpoff, PAGING_PTE_SWPOFF_MASK, PAGING_PTE_SWPOFF_LOBIT);
+
+  pthread_mutex_unlock(&caller->mm->mm_lock);
 
   return 0;
 }
@@ -154,6 +159,8 @@ int pte_set_fpn(struct pcb_t *caller, addr_t pgn, addr_t fpn)
   addr_t pmd=0;
   addr_t pt=0;
 	
+  pthread_mutex_lock(&caller->mm->mm_lock);
+
   // dummy pte alloc to avoid runtime error
   pte = malloc(sizeof(addr_t));
 #ifdef MM64	
@@ -171,6 +178,8 @@ int pte_set_fpn(struct pcb_t *caller, addr_t pgn, addr_t fpn)
   CLRBIT(*pte, PAGING_PTE_SWAPPED_MASK);
 
   SETVAL(*pte, fpn, PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
+
+  pthread_mutex_unlock(&caller->mm->mm_lock);
 
   return 0;
 }
@@ -191,12 +200,16 @@ uint32_t pte_get_entry(struct pcb_t *caller, addr_t pgn)
   addr_t pmd=0;
   addr_t	pt=0;
 	
+  pthread_mutex_lock(&caller->mm->mm_lock);
+
   /* TODO Perform multi-level page mapping */
   get_pd_from_pagenum(pgn, &pgd, &p4d, &pud, &pmd, &pt);
   //... krnl->mm->pgd
   //... krnl->mm->pt
   //pte = &krnl->mm->pt;	
-	
+
+	pthread_mutex_unlock(&caller->mm->mm_lock);
+
   return pte;
 }
 
@@ -382,6 +395,16 @@ int init_mm(struct mm_struct *mm, struct pcb_t *caller)
    //mm->pmd = ...
    //mm->pt = ...
 
+  // Khởi tạo khóa
+  // Cần dùng khóa đệ quy vì các hàm VM thường gọi lồng nhau (nested calls) 
+  pthread_mutexattr_t attr;
+  pthread_mutexattr_init(&attr);
+  pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+  
+  pthread_mutex_init(&mm->mm_lock, &attr);
+  
+  pthread_mutexattr_destroy(&attr);
+  // Kết thúc khởi tạo khóa
 
   /* By default the owner comes with at least one vma */
   vma0->vm_id = 0;

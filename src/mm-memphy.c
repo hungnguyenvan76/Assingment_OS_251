@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 /*
  *  MEMPHY_mv_csr - move MEMPHY cursor
@@ -71,15 +72,16 @@ int MEMPHY_read(struct memphy_struct *mp, addr_t addr, BYTE *value)
       return -1;
 
    pthread_mutex_lock(&mp->memphy_lock);
+   int ret = 0;
 
    if (mp->rdmflg)
       *value = mp->storage[addr];
    else /* Sequential access device */
-      return MEMPHY_seq_read(mp, addr, value);
+     ret = MEMPHY_seq_read(mp, addr, value);
 
    pthread_mutex_unlock(&mp->memphy_lock);
 
-   return 0;
+   return ret;
 }
 
 /*
@@ -115,15 +117,16 @@ int MEMPHY_write(struct memphy_struct *mp, addr_t addr, BYTE data)
       return -1;
 
    pthread_mutex_lock(&mp->memphy_lock);
+   int ret = 0;
 
    if (mp->rdmflg)
       mp->storage[addr] = data;
    else /* Sequential access device */
-      return MEMPHY_seq_write(mp, addr, data);
+      ret = MEMPHY_seq_write(mp, addr, data);
 
    pthread_mutex_unlock(&mp->memphy_lock);
 
-   return 0;
+   return ret;
 }
 
 /*
@@ -164,9 +167,11 @@ int MEMPHY_get_freefp(struct memphy_struct *mp, addr_t *retfpn)
 
    struct framephy_struct *fp = mp->free_fp_list;
 
-   if (fp == NULL)
+   if (fp == NULL) {
+      pthread_mutex_unlock(&mp->memphy_lock);
       return -1;
-
+   }
+   
    *retfpn = fp->fpn;
    mp->free_fp_list = fp->fp_next;
 
@@ -220,11 +225,11 @@ int init_memphy(struct memphy_struct *mp, addr_t max_size, int randomflg)
 
    if (!mp->rdmflg) /* Not Ramdom acess device, then it serial device*/
       mp->cursor = 0;
-
-   return 0;
    
    // Khởi tạo mutex_lock
-   pthread_mutex_init(&mp->mutex_lock, NULL);
+   pthread_mutex_init(&mp->memphy_lock, NULL);
+
+   return 0;
 }
 
 // #endif

@@ -12,7 +12,9 @@
   *        the structure is maintained for future 64bit-32bit
   *        backward compatible feature or PAE feature 
   */
- 
+
+// BỎ FILE NÀY
+
 #include "mm.h"
 #include <stdlib.h>
 #include <stdio.h>

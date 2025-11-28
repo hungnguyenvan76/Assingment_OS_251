@@ -134,6 +134,8 @@ int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, addr_t vmastart, a
  */
 int inc_vma_limit(struct pcb_t *caller, int vmaid, addr_t inc_sz)
 {
+  pthread_mutex_lock(&caller->mm->mm_lock);
+
   //struct vm_rg_struct * newrg = malloc(sizeof(struct vm_rg_struct));
 
   /* TOTO with new address scheme, the size need tobe aligned 
@@ -157,6 +159,8 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, addr_t inc_sz)
 //                   old_end, incnumpage , newrg) < 0)
 //    return -1; /* Map the memory to MEMRAM */
 
+  pthread_mutex_lock(&caller->mm->mm_lock);
+  
   return 0;
 }
 
