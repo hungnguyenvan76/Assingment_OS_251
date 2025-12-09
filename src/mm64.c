@@ -235,10 +235,16 @@ int vmap_pgd_memset(struct pcb_t *caller,           // process call
                     int pgnum)                      // num of mapping page
 {
   //int pgit = 0;
-  //uint64_t pattern = 0xdeadbeef;
+  uint64_t pattern = 0xdeadbeef;
 
   /* TODO memset the page table with given pattern
    */
+
+  for(int i = 0; i < pgnum; i++){
+    addr_t cur_addr = addr + i * PAGING64_PAGESZ;
+    addr_t pgn = cur_addr >> PAGING64_ADDR_PT_LOBIT;
+    pte_set_entry(caller, pgn, pattern);
+  }
 
   return 0;
 }
