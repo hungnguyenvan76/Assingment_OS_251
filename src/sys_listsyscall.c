@@ -8,7 +8,7 @@
  * for the sole purpose of studying while attending the course CO2018.
  */
 
-#include "../include/syscall.h"
+#include "syscall.h"
 
 int __sys_listsyscall(struct krnl_t *krnl, uint32_t pid, struct sc_regs* reg)
 {

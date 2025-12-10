@@ -1,9 +1,9 @@
 
-#include "../include/cpu.h"
-#include "../include/mem.h"
-#include "../include/mm.h"
-#include "../include/syscall.h"
-#include "../include/libmem.h"
+#include "cpu.h"
+#include "mem.h"
+#include "mm.h"
+#include "syscall.h"
+#include "libmem.h"
 
 int calc(struct pcb_t *proc)
 {

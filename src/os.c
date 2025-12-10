@@ -1,9 +1,9 @@
 
-#include "../include/cpu.h"
-#include "../include/timer.h"
-#include "../include/sched.h"
-#include "../include/loader.h"
-#include "../include/mm.h"
+#include "cpu.h"
+#include "timer.h"
+#include "sched.h"
+#include "loader.h"
+#include "mm.h"
 
 #include <pthread.h>
 #include <stdio.h>
@@ -16,7 +16,6 @@ static int done = 0;
 static struct krnl_t os;
 
 #ifdef MM_PAGING
-
 static int memramsz;
 static int memswpsz[PAGING_MAX_MMSWP];
 
@@ -29,8 +28,8 @@ struct mmpaging_ld_args {
 	int active_mswp_id;
 	struct timer_id_t  *timer_id;
 };
-
 #endif
+
 static struct ld_args{
 	char ** path;
 	unsigned long * start_time;

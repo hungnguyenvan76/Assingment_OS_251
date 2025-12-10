@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "../include/queue.h"
+#include "queue.h"
 
 int empty(struct queue_t *q)
 {
@@ -10,8 +10,7 @@ int empty(struct queue_t *q)
 }
 
 void enqueue(struct queue_t *q, struct pcb_t *proc)
-{  
-
+{
     if (!q || !proc)
         return;
 
@@ -58,6 +57,7 @@ struct pcb_t *dequeue(struct queue_t *q)
     }
     q->proc[q->size - 1] = NULL;
     q->size--;
+
     return proc;
 }
 

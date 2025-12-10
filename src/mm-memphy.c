@@ -14,10 +14,11 @@
  * Memory physical module mm/mm-memphy.c
  */
 
-#include "../include/mm.h"
+#include "mm.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 /*
  *  MEMPHY_mv_csr - move MEMPHY cursor
@@ -70,12 +71,17 @@ int MEMPHY_read(struct memphy_struct *mp, addr_t addr, BYTE *value)
    if (mp == NULL)
       return -1;
 
+   pthread_mutex_lock(&mp->memphy_lock);
+   int ret = 0;
+
    if (mp->rdmflg)
       *value = mp->storage[addr];
    else /* Sequential access device */
-      return MEMPHY_seq_read(mp, addr, value);
+     ret = MEMPHY_seq_read(mp, addr, value);
 
-   return 0;
+   pthread_mutex_unlock(&mp->memphy_lock);
+
+   return ret;
 }
 
 /*
@@ -110,12 +116,17 @@ int MEMPHY_write(struct memphy_struct *mp, addr_t addr, BYTE data)
    if (mp == NULL)
       return -1;
 
+   pthread_mutex_lock(&mp->memphy_lock);
+   int ret = 0;
+
    if (mp->rdmflg)
       mp->storage[addr] = data;
    else /* Sequential access device */
-      return MEMPHY_seq_write(mp, addr, data);
+      ret = MEMPHY_seq_write(mp, addr, data);
 
-   return 0;
+   pthread_mutex_unlock(&mp->memphy_lock);
+
+   return ret;
 }
 
 /*
@@ -152,11 +163,15 @@ int MEMPHY_format(struct memphy_struct *mp, int pagesz)
 
 int MEMPHY_get_freefp(struct memphy_struct *mp, addr_t *retfpn)
 {
+   pthread_mutex_lock(&mp->memphy_lock);
+
    struct framephy_struct *fp = mp->free_fp_list;
 
-   if (fp == NULL)
+   if (fp == NULL) {
+      pthread_mutex_unlock(&mp->memphy_lock);
       return -1;
-
+   }
+   
    *retfpn = fp->fpn;
    mp->free_fp_list = fp->fp_next;
 
@@ -164,6 +179,8 @@ int MEMPHY_get_freefp(struct memphy_struct *mp, addr_t *retfpn)
     * No garbage collector acting then it not been released
     */
    free(fp);
+
+   pthread_mutex_unlock(&mp->memphy_lock);
 
    return 0;
 }
@@ -178,6 +195,8 @@ int MEMPHY_dump(struct memphy_struct *mp)
 
 int MEMPHY_put_freefp(struct memphy_struct *mp, addr_t fpn)
 {
+   pthread_mutex_lock(&mp->memphy_lock);
+
    struct framephy_struct *fp = mp->free_fp_list;
    struct framephy_struct *newnode = malloc(sizeof(struct framephy_struct));
 
@@ -185,6 +204,8 @@ int MEMPHY_put_freefp(struct memphy_struct *mp, addr_t fpn)
    newnode->fpn = fpn;
    newnode->fp_next = fp;
    mp->free_fp_list = newnode;
+
+   pthread_mutex_unlock(&mp->memphy_lock);
 
    return 0;
 }
@@ -204,6 +225,9 @@ int init_memphy(struct memphy_struct *mp, addr_t max_size, int randomflg)
 
    if (!mp->rdmflg) /* Not Ramdom acess device, then it serial device*/
       mp->cursor = 0;
+   
+   // Khởi tạo mutex_lock
+   pthread_mutex_init(&mp->memphy_lock, NULL);
 
    return 0;
 }

@@ -8,10 +8,10 @@
  * for the sole purpose of studying while attending the course CO2018.
  */
 
-#include "../include/os-mm.h"
-#include "../include/syscall.h"
-#include "../include/libmem.h"
-#include "../include/queue.h"
+#include "os-mm.h"
+#include "syscall.h"
+#include "libmem.h"
+#include "queue.h"
 #include <stdlib.h>
 
 #ifdef MM64
@@ -80,4 +80,5 @@ int __sys_memmap(struct krnl_t *krnl, uint32_t pid, struct sc_regs* regs)
     
     return 0;
 }
+
 

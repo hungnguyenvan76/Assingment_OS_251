@@ -15,7 +15,7 @@
  */
 
 #include "string.h"
-#include "../include/mm.h"
+#include "mm.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>

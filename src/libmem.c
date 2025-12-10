@@ -14,11 +14,11 @@
  * Memory Module Library libmem.c 
  */
 
-#include "../include/string.h"
-#include "../include/mm.h"
-#include "../include/mm64.h"
-#include "../include/syscall.h"
-#include "../include/libmem.h"
+#include "string.h"
+#include "mm.h"
+#include "mm64.h"
+#include "syscall.h"
+#include "libmem.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
@@ -278,7 +278,7 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 int pg_getval(struct mm_struct *mm, int addr, BYTE *data, struct pcb_t *caller)
 {
   int pgn = PAGING_PGN(addr);
-  int off = PAGING_OFFST(addr);
+//  int off = PAGING_OFFST(addr);
   int fpn;
 
   if (pg_getpage(mm, pgn, &fpn, caller) != 0)
