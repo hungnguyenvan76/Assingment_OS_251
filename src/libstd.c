@@ -8,8 +8,8 @@
  * for the sole purpose of studying while attending the course CO2018.
  */
 
-#include "common.h"
-#include "syscall.h"
+#include "../include/common.h"
+#include "../include/syscall.h"
 
 int libsyscall (struct pcb_t *caller,
              uint32_t syscall_idx,

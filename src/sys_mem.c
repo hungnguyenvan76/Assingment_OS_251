@@ -8,16 +8,16 @@
  * for the sole purpose of studying while attending the course CO2018.
  */
 
-#include "os-mm.h"
-#include "syscall.h"
-#include "libmem.h"
-#include "queue.h"
+#include "../include/os-mm.h"
+#include "../include/syscall.h"
+#include "../include/libmem.h"
+#include "../include/queue.h"
 #include <stdlib.h>
 
 #ifdef MM64
-#include "mm64.h"
+#include "../include/mm64.h"
 #else
-#include "mm.h"
+#include "../include/mm.h"
 #endif
 
 //typedef char BYTE;

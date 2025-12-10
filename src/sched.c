@@ -8,8 +8,8 @@
  * for the sole purpose of studying while attending the course CO2018.
  */
 
-#include "queue.h"
-#include "sched.h"
+#include "../include/queue.h"
+#include "../include/sched.h"
 #include <pthread.h>
 
 #include <stdlib.h>

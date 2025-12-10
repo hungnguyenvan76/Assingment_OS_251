@@ -15,10 +15,10 @@
  */
 
 #include "string.h"
-#include "mm.h"
-#include "mm64.h"
-#include "syscall.h"
-#include "libmem.h"
+#include "../include/mm.h"
+#include "../include/mm64.h"
+#include "../include/syscall.h"
+#include "../include/libmem.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
@@ -332,14 +332,20 @@ int pg_setval(struct mm_struct *mm, int addr, BYTE value, struct pcb_t *caller)
 int __read(struct pcb_t *caller, int vmaid, int rgid, addr_t offset, BYTE *data)
 {
   struct vm_rg_struct *currg = get_symrg_byid(caller->krnl->mm, rgid);
-
+  pthread_mutex_lock(&mmvm_lock);
 //  struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
 
   /* TODO Invalid memory identify */
+  if (currg == NULL) {
+    pthread_mutex_unlock(&mmvm_lock);
+    return -1;
+  }
 
-  pg_getval(caller->krnl->mm, currg->rg_start + offset, data, caller);
+  struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
+  int ret = pg_getval(caller->krnl->mm, currg->rg_start + offset, data, caller);
 
-  return 0;
+  pthread_mutex_unlock(&mmvm_lock);
+  return ret;
 }
 
 /*libread - PAGING-based read a region memory */

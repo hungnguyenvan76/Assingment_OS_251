@@ -15,7 +15,8 @@
  */
 
 #include "string.h"
-#include "mm.h"
+#include "../include/mm.h"
+#include "../include/mm64.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
@@ -131,6 +132,7 @@ int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, addr_t vmastart, a
  */
 int inc_vma_limit(struct pcb_t *caller, int vmaid, addr_t inc_sz)
 {
+  pthread_mutex_lock(&caller->krnl->mm->mm_lock);
   struct vm_rg_struct * newrg = malloc(sizeof(struct vm_rg_struct));
   /* TOTO with new address scheme, the size need tobe aligned 
   *      the raw inc_sz maybe not fit pagesize
@@ -148,6 +150,7 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, addr_t inc_sz)
   if(new_sbrk < old_bound){
     cur_area->sbrk = new_sbrk;
     free(newrg);
+    pthread_mutex_unlock(&caller->krnl->mm->mm_lock);
     return 0;
   }
   
@@ -160,6 +163,7 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, addr_t inc_sz)
   if (validate_overlap_vm_area(caller, vmaid, area->rg_start, area->rg_end) < 0){
     free(newrg);
     free(area);
+    pthread_mutex_unlock(&caller->krnl->mm->mm_lock);
     return -1;
   }/*Overlap and failed allocation */
 
@@ -169,11 +173,16 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, addr_t inc_sz)
   /* The obtained vm area (only)
     * now will be alloc real ram region */
 
- if (vm_map_ram(caller, area->rg_start, area->rg_end, old_bound, inc_num_page, newrg) < 0)
-   return -1; /* Map the memory to MEMRAM */
+  if (vm_map_ram(caller, area->rg_start, area->rg_end, 
+                      old_bound, inc_num_page, newrg) < 0) {
+    pthread_mutex_unlock(&caller->krnl->mm->mm_lock); 
+    return -1; /* Map the memory to MEMRAM */
+  }
 
   free(newrg);
   free(area);
+
+  pthread_mutex_unlock(&caller->krnl->mm->mm_lock);
   return 0;
 }
 

@@ -1,5 +1,5 @@
 
-#include "mem.h"
+#include "../include/mem.h"
 #include "stdlib.h"
 #include "string.h"
 #include <pthread.h>
@@ -48,6 +48,9 @@ static struct trans_table_t * get_trans_table(
 	int i;
 	for (i = 0; i < page_table->size; i++) {
 		// Enter your code here
+		if (page_table->table[i].v_index == index) {
+			return page_table->table[i].next_lv;	// Trả về địa chỉ của bảng phân trang cấp 2
+		}
 	}
 	return NULL;
 
@@ -125,21 +128,27 @@ int free_mem(addr_t address, struct pcb_t * proc) {
 }
 
 int read_mem(addr_t address, struct pcb_t * proc, BYTE * data) {
+	pthread_mutex_lock(&mem_lock);
 	addr_t physical_addr;
 	if (translate(address, &physical_addr, proc)) {
 		*data = _ram[physical_addr];
+		pthread_mutex_unlock(&mem_lock);
 		return 0;
 	}else{
+		pthread_mutex_unlock(&mem_lock);
 		return 1;
 	}
 }
 
 int write_mem(addr_t address, struct pcb_t * proc, BYTE data) {
+	pthread_mutex_lock(&mem_lock);
 	addr_t physical_addr;
 	if (translate(address, &physical_addr, proc)) {
 		_ram[physical_addr] = data;
+		pthread_mutex_unlock(&mem_lock);
 		return 0;
 	}else{
+		pthread_mutex_unlock(&mem_lock);
 		return 1;
 	}
 }

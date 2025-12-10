@@ -8,8 +8,8 @@
  * for the sole purpose of studying while attending the course CO2018.
  */
 
-#include "syscall.h"
-#include "common.h"
+#include "../include/syscall.h"
+#include "../include/common.h"
 
 #define __SYSCALL(nr, sym) extern int __##sym(struct krnl_t*, uint32_t,struct sc_regs*);
 #include "syscalltbl.lst"

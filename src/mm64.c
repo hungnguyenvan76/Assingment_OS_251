@@ -13,7 +13,7 @@
  * Memory management unit mm/mm.c
  */
 
-#include "mm64.h"
+#include "../include/mm64.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
@@ -199,28 +199,43 @@ uint32_t pte_get_entry(struct pcb_t *caller, addr_t pgn)
   addr_t pmd=0;
   addr_t	pt=0;
 	struct mm_struct *mm = caller->krnl->mm;
-  //pthread_mutex_lock(&caller->mm->mm_lock);
+  pthread_mutex_lock(&mm->mm_lock);
 
   /* TODO Perform multi-level page mapping */
   get_pd_from_pagenum(pgn, &pgd, &p4d, &pud, &pmd, &pt);
   
-  if(mm->pgd == NULL) return 0;
-  if(mm->pgd[pgd] == NULL) return 0;
+  if(mm->pgd == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return 0;
+  }
+  if(mm->pgd[pgd] == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return 0;
+  }
 
   addr_t *p4d_table = (addr_t*)mm->pgd[pgd];
-  if(p4d_table[p4d] == NULL) return 0;
+  if(p4d_table[p4d] == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return 0;
+  }
 
   addr_t* pud_table = (addr_t*)p4d_table[p4d];
-  if(pud_table[pud] == NULL) return 0;
+  if(pud_table[pud] == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return 0;
+  }
   
   addr_t* pmd_table = (addr_t*)pud_table[pud];
-  if(pmd_table[pmd] == NULL) return 0;
+  if(pmd_table[pmd] == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return 0;
+  }
 
   addr_t* pt_table = (addr_t*)pmd_table[pmd];
   
-  return (uint32_t)pt_table[pt];
+  pte = (uint32_t)pt_table[pt];
 
-	//pthread_mutex_unlock(&caller->mm->mm_lock);
+	pthread_mutex_unlock(&mm->mm_lock);
 
   return pte;
 }
@@ -239,23 +254,41 @@ int pte_set_entry(struct pcb_t *caller, addr_t pgn, uint32_t pte_val)
   addr_t	pt=0;
 
   struct mm_struct *mm = caller->krnl->mm;
+  pthread_mutex_lock(&mm->mm_lock);
+
   get_pd_from_pagenum(pgn, &pgd, &p4d, &pud, &pmd, &pt);
   
-  if(mm->pgd == NULL) return -1;
-  if(mm->pgd[pgd] == NULL) return -1;
+  if(mm->pgd == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return -1;
+  }
+  if(mm->pgd[pgd] == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return -1;
+  }
 
   addr_t *p4d_table = (addr_t*)mm->pgd[pgd];
-  if(p4d_table[p4d] == NULL) return 0;
+  if(p4d_table[p4d] == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return 0;
+  }
 
   addr_t* pud_table = (addr_t*)p4d_table[p4d];
-  if(pud_table[pud] == NULL) return 0;
+  if(pud_table[pud] == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return 0;
+  }
   
   addr_t* pmd_table = (addr_t*)pud_table[pud];
-  if(pmd_table[pmd] == NULL) return 0;
+  if(pmd_table[pmd] == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return 0;
+  }
 
   addr_t* pt_table = (addr_t*)pmd_table[pmd];
   pt_table[pt] = pte_val;
-	
+
+	pthread_mutex_unlock(&mm->mm_lock);
 	return 0;
 }
 
@@ -466,7 +499,7 @@ int init_mm(struct mm_struct *mm, struct pcb_t *caller)
   // Cần dùng khóa đệ quy vì các hàm VM thường gọi lồng nhau (nested calls) 
   pthread_mutexattr_t attr;
   pthread_mutexattr_init(&attr);
-  pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+  pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE_NP);
   
   pthread_mutex_init(&mm->mm_lock, &attr);
   

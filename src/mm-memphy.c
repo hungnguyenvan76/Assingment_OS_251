@@ -14,7 +14,7 @@
  * Memory physical module mm/mm-memphy.c
  */
 
-#include "mm.h"
+#include "../include/mm.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
