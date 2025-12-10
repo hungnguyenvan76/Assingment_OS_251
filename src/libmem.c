@@ -23,6 +23,8 @@
 #include <stdio.h>
 #include <pthread.h>
 
+#include "common.h"
+
 static pthread_mutex_t mmvm_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /*enlist_vm_freerg_list - add new rg to freerg_list
@@ -69,51 +71,38 @@ struct vm_rg_struct *get_symrg_byid(struct mm_struct *mm, int rgid)
  */
 int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *alloc_addr)
 {
-  /*Allocate at the toproof */
-  pthread_mutex_lock(&mmvm_lock);
+  pthread_mutex_lock(&mmvm_lock); // Lock lại cho an toàn (multithread)
   struct vm_rg_struct rgnode;
-  struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
-  int inc_sz=0;
 
+  // BƯỚC 1: Thử tìm trong kho hàng cũ (Tái sử dụng)
   if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0)
   {
+    // Tìm thấy! Cập nhật bảng ký hiệu biến (Symbol Table)
     caller->krnl->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
     caller->krnl->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
- 
     *alloc_addr = rgnode.rg_start;
 
     pthread_mutex_unlock(&mmvm_lock);
     return 0;
   }
 
-  /* TODO get_free_vmrg_area FAILED handle the region management (Fig.6)*/
+  // BƯỚC 2: Hết hàng cũ -> Phải nới rộng bộ nhớ (Heap Expansion)
+  struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
+  
+  // Tính toán kích thước cần nới (Phải làm tròn theo Page Size - Alignment)
+  // Ví dụ cần 10 byte, nhưng mỗi lần xin phải xin chẵn 256 byte (1 page)
+  int inc_sz = PAGING_PAGE_ALIGNSZ(size); 
+  
+  int old_sbrk = cur_vma->sbrk; // Lưu lại mốc biên giới cũ (đây sẽ là địa chỉ bắt đầu của user)
 
-  /*Attempt to increate limit to get space */
-#ifdef MM64
-  inc_sz = (uint32_t)(size/(int)PAGING64_PAGESZ);
-  inc_sz = inc_sz + 1;
-#else
-  inc_sz = PAGING_PAGE_ALIGNSZ(size);
-#endif
-  int old_sbrk;
-  inc_sz = inc_sz + 1;
-
-  old_sbrk = cur_vma->sbrk;
-
-  /* TODO INCREASE THE LIMIT
-   * SYSCALL 1 sys_memmap
-   */
+  // Gọi System Call nhờ Kernel nới đất
   struct sc_regs regs;
-  regs.a1 = SYSMEM_INC_OP;
+  regs.a1 = SYSMEM_INC_OP; // Opcode nới bộ nhớ
   regs.a2 = vmaid;
-#ifdef MM64
-  regs.a3 = size;
-#else
-  regs.a3 = PAGING_PAGE_ALIGNSZ(size);
-#endif  
-  syscall(caller->krnl, caller->pid, 17, &regs); /* SYSCALL 17 sys_memmap */
+  regs.a3 = inc_sz;        // Kích thước muốn nới
+  syscall(caller->krnl, caller->pid, 17, &regs); // Gọi sys_memmap (ID 17)
 
-  /*Successful increase limit */
+  // BƯỚC 3: Cập nhật bảng ký hiệu cho vùng nhớ mới toanh này
   caller->krnl->mm->symrgtbl[rgid].rg_start = old_sbrk;
   caller->krnl->mm->symrgtbl[rgid].rg_end = old_sbrk + size;
 
@@ -121,8 +110,7 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *allo
 
   pthread_mutex_unlock(&mmvm_lock);
   return 0;
-
-}
+}       
 
 /*__free - remove a region memory
  *@caller: caller
@@ -135,30 +123,35 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
 {
   pthread_mutex_lock(&mmvm_lock);
 
-  if (rgid < 0 || rgid > PAGING_MAX_SYMTBL_SZ)
-  {
+  // Validate đầu vào
+  if (rgid < 0 || rgid > PAGING_MAX_SYMTBL_SZ) {
     pthread_mutex_unlock(&mmvm_lock);
     return -1;
   }
 
-  /* TODO: Manage the collect freed region to freerg_list */
+  // 1. Lấy thông tin vùng nhớ từ ID
   struct vm_rg_struct *rgnode = get_symrg_byid(caller->krnl->mm, rgid);
-
-  if (rgnode->rg_start == 0 && rgnode->rg_end == 0)
-  {
+  
+  // Kiểm tra xem biến này có được cấp phát chưa
+  if (rgnode->rg_start == 0 && rgnode->rg_end == 0) {
     pthread_mutex_unlock(&mmvm_lock);
     return -1;
   }
+
+  // 2. Tạo node mới để lưu vào kho "Đất bỏ hoang"
   struct vm_rg_struct *freerg_node = malloc(sizeof(struct vm_rg_struct));
   freerg_node->rg_start = rgnode->rg_start;
   freerg_node->rg_end = rgnode->rg_end;
-  freerg_node->rg_next = NULL;
+  
+  // 3. Chèn vào đầu danh sách (LIFO behavior for free list)
+  struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
+  freerg_node->rg_next = cur_vma->vm_freerg_list;
+  cur_vma->vm_freerg_list = freerg_node;
 
-  rgnode->rg_start = rgnode->rg_end = 0;
+  // 4. Xóa thông tin sở hữu trong bảng ký hiệu (User không còn sở hữu nữa)
+  rgnode->rg_start = 0;
+  rgnode->rg_end = 0;
   rgnode->rg_next = NULL;
-
-  /*enlist the obsoleted memory region */
-  enlist_vm_freerg_list(caller->krnl->mm, freerg_node);
 
   pthread_mutex_unlock(&mmvm_lock);
   return 0;
@@ -481,61 +474,45 @@ int find_victim_page(struct mm_struct *mm, addr_t *retpgn)
 int get_free_vmrg_area(struct pcb_t *caller, int vmaid, int size, struct vm_rg_struct *newrg)
 {
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
+  struct vm_rg_struct *rgit = cur_vma->vm_freerg_list; // Con trỏ chạy
+  struct vm_rg_struct *prev = NULL; // Con trỏ lưu node trước đó (để nối lại chuỗi khi xóa)
 
-  struct vm_rg_struct *rgit = cur_vma->vm_freerg_list;
+  if (rgit == NULL) return -1; // Hết đất
 
-  if (rgit == NULL)
-    return -1;
-
-  /* Probe unintialized newrg */
-  newrg->rg_start = newrg->rg_end = -1;
-
-  /* Traverse on list of free vm region to find a fit space */
+  // Duyệt danh sách
   while (rgit != NULL)
   {
-    if (rgit->rg_start + size <= rgit->rg_end)
-    { /* Current region has enough space */
+    if (rgit->rg_start + size <= rgit->rg_end) // Tìm thấy vùng đủ chỗ!
+    { 
+      // 1. Ghi nhận kết quả trả về cho user
       newrg->rg_start = rgit->rg_start;
       newrg->rg_end = rgit->rg_start + size;
 
-      /* Update left space in chosen region */
+      // 2. Xử lý phần dư thừa trong danh sách
       if (rgit->rg_start + size < rgit->rg_end)
       {
-        rgit->rg_start = rgit->rg_start + size;
+        // Case B: Còn dư -> Chỉ cần dịch start lên, node vẫn giữ đó
+        rgit->rg_start += size;
       }
       else
-      { /*Use up all space, remove current node */
-        /*Clone next rg node */
-        struct vm_rg_struct *nextrg = rgit->rg_next;
-
-        /*Cloning */
-        if (nextrg != NULL)
-        {
-          rgit->rg_start = nextrg->rg_start;
-          rgit->rg_end = nextrg->rg_end;
-
-          rgit->rg_next = nextrg->rg_next;
-
-          free(nextrg);
+      { 
+        // Case A: Vừa khít -> Phải xóa node này khỏi danh sách
+        if (prev != NULL) {
+            prev->rg_next = rgit->rg_next; // Nối node trước với node sau
+        } else {
+            cur_vma->vm_freerg_list = rgit->rg_next; // Nếu xóa node đầu thì cập nhật head
         }
-        else
-        {                                /*End of free list */
-          rgit->rg_start = rgit->rg_end; // dummy, size 0 region
-          rgit->rg_next = NULL;
-        }
+        free(rgit); // Giải phóng cái vỏ struct (node quản lý)
       }
-      break;
+      return 0; // Success
     }
-    else
-    {
-      rgit = rgit->rg_next; // Traverse next rg
-    }
+    
+    // Chưa tìm thấy, đi tiếp
+    prev = rgit;
+    rgit = rgit->rg_next;
   }
 
-  if (newrg->rg_start == -1) // new region not found
-    return -1;
-
-  return 0;
+  return -1; // Duyệt hết mà không có
 }
 
 // #endif
