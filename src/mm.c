@@ -10,12 +10,10 @@
  
  /* NOTICE this moudle is deprecated in LamiaAtrium release
   *        the structure is maintained for future 64bit-32bit
-  *        backward compatible feature or PAE feature 
+  *        backward compatible feature or PAE feature 
   */
-
-// BỎ FILE NÀY
-
-#include "mm.h"
+ 
+#include "../include/mm.h"
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -188,7 +186,8 @@ addr_t vmap_page_range(struct pcb_t *caller,           // process call
 
 addr_t alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struct **frm_lst)
 {
-  printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
+  __func__;
+ // printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", );
   return 0;
 }
 
@@ -216,7 +215,7 @@ addr_t vm_map_ram(struct pcb_t *caller, addr_t astart, addr_t aend, addr_t mapst
 int __swap_cp_page(struct memphy_struct *mpsrc, addr_t srcfpn,
                    struct memphy_struct *mpdst, addr_t dstfpn)
 {
-  printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
+  __func__;
   return 0;
 }
 
@@ -226,8 +225,7 @@ int __swap_cp_page(struct memphy_struct *mpsrc, addr_t srcfpn,
  * @caller: mm owner
  */
 int init_mm(struct mm_struct *mm, struct pcb_t *caller)
-{
-  printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
+{ __func__;
   return 0;
 }
 
