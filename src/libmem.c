@@ -69,15 +69,12 @@ struct vm_rg_struct *get_symrg_byid(struct mm_struct *mm, int rgid)
  *@alloc_addr: address of allocated memory region
  *
  */
-int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *alloc_addr)
-{
-  pthread_mutex_lock(&mmvm_lock); // Lock lại cho an toàn (multithread)
+int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *alloc_addr) {
+  pthread_mutex_lock(&mmvm_lock); //lock 
   struct vm_rg_struct rgnode;
 
-  // BƯỚC 1: Thử tìm trong kho hàng cũ (Tái sử dụng)
-  if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0)
-  {
-    // Tìm thấy! Cập nhật bảng ký hiệu biến (Symbol Table)
+  //Tai su dung
+  if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0) {
     caller->krnl->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
     caller->krnl->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
     *alloc_addr = rgnode.rg_start;
@@ -86,23 +83,22 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *allo
     return 0;
   }
 
-  // BƯỚC 2: Hết hàng cũ -> Phải nới rộng bộ nhớ (Heap Expansion)
+  //Neu khong co -> mo rong bo nho
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
   
-  // Tính toán kích thước cần nới (Phải làm tròn theo Page Size - Alignment)
-  // Ví dụ cần 10 byte, nhưng mỗi lần xin phải xin chẵn 256 byte (1 page)
+  //Tinh toan kich thuoc can mo rong
   int inc_sz = PAGING_PAGE_ALIGNSZ(size); 
   
-  int old_sbrk = cur_vma->sbrk; // Lưu lại mốc biên giới cũ (đây sẽ là địa chỉ bắt đầu của user)
+  int old_sbrk = cur_vma->sbrk; 
 
-  // Gọi System Call nhờ Kernel nới đất
+  //goi system call -> kernal mo rong
   struct sc_regs regs;
-  regs.a1 = SYSMEM_INC_OP; // Opcode nới bộ nhớ
+  regs.a1 = SYSMEM_INC_OP; 
   regs.a2 = vmaid;
-  regs.a3 = inc_sz;        // Kích thước muốn nới
-  syscall(caller->krnl, caller->pid, 17, &regs); // Gọi sys_memmap (ID 17)
+  regs.a3 = inc_sz;        
+  syscall(caller->krnl, caller->pid, 17, &regs);
 
-  // BƯỚC 3: Cập nhật bảng ký hiệu cho vùng nhớ mới toanh này
+  //cap nhat bang ky hieu cho vung nho moi
   caller->krnl->mm->symrgtbl[rgid].rg_start = old_sbrk;
   caller->krnl->mm->symrgtbl[rgid].rg_end = old_sbrk + size;
 
@@ -119,36 +115,35 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *allo
  *@size: allocated size
  *
  */
-int __free(struct pcb_t *caller, int vmaid, int rgid)
-{
-  pthread_mutex_lock(&mmvm_lock);
+int __free(struct pcb_t *caller, int vmaid, int rgid) {
+  pthread_mutex_lock(&mmvm_lock); //lock
 
-  // Validate đầu vào
+  //kiem tra dau vao
   if (rgid < 0 || rgid > PAGING_MAX_SYMTBL_SZ) {
     pthread_mutex_unlock(&mmvm_lock);
     return -1;
   }
 
-  // 1. Lấy thông tin vùng nhớ từ ID
+  //lay thong tin vung nho tu ID
   struct vm_rg_struct *rgnode = get_symrg_byid(caller->krnl->mm, rgid);
   
-  // Kiểm tra xem biến này có được cấp phát chưa
+  //kiem tra xem da cap phat chua
   if (rgnode->rg_start == 0 && rgnode->rg_end == 0) {
     pthread_mutex_unlock(&mmvm_lock);
     return -1;
   }
 
-  // 2. Tạo node mới để lưu vào kho "Đất bỏ hoang"
+  //tao node moi de luu
   struct vm_rg_struct *freerg_node = malloc(sizeof(struct vm_rg_struct));
   freerg_node->rg_start = rgnode->rg_start;
   freerg_node->rg_end = rgnode->rg_end;
   
-  // 3. Chèn vào đầu danh sách (LIFO behavior for free list)
+  //chen vao dau danh sach
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
   freerg_node->rg_next = cur_vma->vm_freerg_list;
   cur_vma->vm_freerg_list = freerg_node;
 
-  // 4. Xóa thông tin sở hữu trong bảng ký hiệu (User không còn sở hữu nữa)
+  //xoa thong tin so huu
   rgnode->rg_start = 0;
   rgnode->rg_end = 0;
   rgnode->rg_next = NULL;
