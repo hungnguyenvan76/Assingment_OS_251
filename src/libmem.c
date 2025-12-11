@@ -506,48 +506,46 @@ int find_victim_page(struct mm_struct *mm, addr_t *retpgn)
  *@size: allocated size
  *
  */
-int get_free_vmrg_area(struct pcb_t *caller, int vmaid, int size, struct vm_rg_struct *newrg)
-{
+
+int get_free_vmrg_area(struct pcb_t *caller, int vmaid, int size, struct vm_rg_struct *newrg) {
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
-  struct vm_rg_struct *rgit = cur_vma->vm_freerg_list; // Con trỏ chạy
-  struct vm_rg_struct *prev = NULL; // Con trỏ lưu node trước đó (để nối lại chuỗi khi xóa)
+  struct vm_rg_struct *rgit = cur_vma->vm_freerg_list;    //con tro de duyet
+  struct vm_rg_struct *prev = NULL;                       //con tro luu node truoc do
 
-  if (rgit == NULL) return -1; // Hết đất
+  //khong con vung de cap phat
+  if (rgit == NULL) {
+    return -1; 
+  } 
 
-  // Duyệt danh sách
-  while (rgit != NULL)
-  {
-    if (rgit->rg_start + size <= rgit->rg_end) // Tìm thấy vùng đủ chỗ!
-    { 
-      // 1. Ghi nhận kết quả trả về cho user
+  //duyet qua danh sach
+  while (rgit != NULL) {
+    if (rgit->rg_start + size <= rgit->rg_end) {  //tim thay vung du cho de cap phat
       newrg->rg_start = rgit->rg_start;
       newrg->rg_end = rgit->rg_start + size;
 
-      // 2. Xử lý phần dư thừa trong danh sách
-      if (rgit->rg_start + size < rgit->rg_end)
-      {
-        // Case B: Còn dư -> Chỉ cần dịch start lên, node vẫn giữ đó
+      if (rgit->rg_start + size < rgit->rg_end) {  //xu ly phan du thua
+        //con du -> dich start len (khong giai phong node)
         rgit->rg_start += size;
-      }
-      else
-      { 
-        // Case A: Vừa khít -> Phải xóa node này khỏi danh sách
+      } else { 
+        //vua khit -> giai phong node khoi danh sach
         if (prev != NULL) {
-            prev->rg_next = rgit->rg_next; // Nối node trước với node sau
+            prev->rg_next = rgit->rg_next; //noi node truoc voi sau
         } else {
-            cur_vma->vm_freerg_list = rgit->rg_next; // Nếu xóa node đầu thì cập nhật head
+            cur_vma->vm_freerg_list = rgit->rg_next; //neu xoa node dau -> update head
         }
-        free(rgit); // Giải phóng cái vỏ struct (node quản lý)
+
+        free(rgit);
       }
-      return 0; // Success
+
+      return 0; //bao thanh cong
     }
     
-    // Chưa tìm thấy, đi tiếp
+    //chua tim thay, di tiep
     prev = rgit;
     rgit = rgit->rg_next;
   }
 
-  return -1; // Duyệt hết mà không có
+  return -1; //duyet het nhung khong con cho trong
 }
 
 // #endif
