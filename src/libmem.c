@@ -207,8 +207,7 @@ printf("%s:%d\n",__func__,__LINE__);
  *@caller: caller
  *
  */
-int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
-{
+int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller) {
   uint32_t pte = pte_get_entry(caller, pgn);
 
   // Trường hợp 1: Trang đã có trong RAM (Present)
@@ -473,32 +472,30 @@ int free_pcb_memph(struct pcb_t *caller)
  *@pgn: return page number
  *
  */
-int find_victim_page(struct mm_struct *mm, addr_t *retpgn)
-{
-  struct pgn_t *pg = mm->fifo_pgn;
+int find_victim_page(struct mm_struct *mm, addr_t *retpgn) {
+  struct pgn_t *pg = mm->fifo_pgn;  //lay dau danh sach
 
-  // Case 0: Danh sách rỗng
+  //danh sach rong
   if (!pg)
     return -1;
 
-  // Case 1: Danh sách chỉ có 1 phần tử
+  //danh sach chi co 1 phan tu
   if (pg->pg_next == NULL) {
       *retpgn = pg->pgn;
-      mm->fifo_pgn = NULL; // Cập nhật lại head
+      mm->fifo_pgn = NULL;
       free(pg);
       return 0;
   }
 
-  // Case 2: Danh sách có >= 2 phần tử -> Tìm đuôi (Tail)
+  //Danh sach co > 1 phan tu
   struct pgn_t *prev = NULL;
-  while (pg->pg_next)
-  {
+  while (pg->pg_next) { //duyet den tail
     prev = pg;
     pg = pg->pg_next;
   }
   
-  *retpgn = pg->pgn;
-  prev->pg_next = NULL; // Cắt đuôi
+  *retpgn = pg->pgn;  //node cuoi cung, da ra khoi list
+  prev->pg_next = NULL; 
   free(pg);
 
   return 0;
