@@ -1,9 +1,10 @@
 
-#include "cpu.h"
-#include "timer.h"
-#include "sched.h"
-#include "loader.h"
-#include "mm.h"
+#include "../include/cpu.h"
+#include "../include/timer.h"
+#include "../include/sched.h"
+#include "../include/loader.h"
+#include "../include/mm.h"
+#include "../include/mm64.h"
 
 #include <pthread.h>
 #include <stdio.h>

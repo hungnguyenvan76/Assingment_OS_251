@@ -13,11 +13,12 @@
  * Memory management unit mm/mm.c
  */
 
-#include "mm64.h"
+#include "../include/mm64.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
+#include <pthread.h>
 
 #if defined(MM64)
 
@@ -115,7 +116,9 @@ int pte_set_swap(struct pcb_t *caller, addr_t pgn, int swptyp, addr_t swpoff)
   addr_t pud=0;
   addr_t pmd=0;
   addr_t pt=0;
-	
+
+	pthread_mutex_lock(&caller->mm->mm_lock);
+
   // dummy pte alloc to avoid runtime error
   pte = malloc(sizeof(addr_t));
 #ifdef MM64	
@@ -134,6 +137,8 @@ int pte_set_swap(struct pcb_t *caller, addr_t pgn, int swptyp, addr_t swpoff)
 
   SETVAL(*pte, swptyp, PAGING_PTE_SWPTYP_MASK, PAGING_PTE_SWPTYP_LOBIT);
   SETVAL(*pte, swpoff, PAGING_PTE_SWPOFF_MASK, PAGING_PTE_SWPOFF_LOBIT);
+
+  pthread_mutex_unlock(&caller->mm->mm_lock);
 
   return 0;
 }
@@ -154,6 +159,8 @@ int pte_set_fpn(struct pcb_t *caller, addr_t pgn, addr_t fpn)
   addr_t pmd=0;
   addr_t pt=0;
 	
+  pthread_mutex_lock(&caller->mm->mm_lock);
+
   // dummy pte alloc to avoid runtime error
   pte = malloc(sizeof(addr_t));
 #ifdef MM64	
@@ -172,6 +179,8 @@ int pte_set_fpn(struct pcb_t *caller, addr_t pgn, addr_t fpn)
 
   SETVAL(*pte, fpn, PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
 
+  pthread_mutex_unlock(&caller->mm->mm_lock);
+
   return 0;
 }
 
@@ -183,20 +192,51 @@ int pte_set_fpn(struct pcb_t *caller, addr_t pgn, addr_t fpn)
  **/
 uint32_t pte_get_entry(struct pcb_t *caller, addr_t pgn)
 {
-//  struct krnl_t *krnl = caller->krnl;
   uint32_t pte = 0;
   addr_t pgd=0;
   addr_t p4d=0;
   addr_t pud=0;
   addr_t pmd=0;
   addr_t	pt=0;
-	
+	struct mm_struct *mm = caller->krnl->mm;
+  pthread_mutex_lock(&mm->mm_lock);
+
   /* TODO Perform multi-level page mapping */
   get_pd_from_pagenum(pgn, &pgd, &p4d, &pud, &pmd, &pt);
-  //... krnl->mm->pgd
-  //... krnl->mm->pt
-  //pte = &krnl->mm->pt;	
-	
+  
+  if(mm->pgd == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return 0;
+  }
+  if(mm->pgd[pgd] == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return 0;
+  }
+
+  addr_t *p4d_table = (addr_t*)mm->pgd[pgd];
+  if(p4d_table[p4d] == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return 0;
+  }
+
+  addr_t* pud_table = (addr_t*)p4d_table[p4d];
+  if(pud_table[pud] == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return 0;
+  }
+  
+  addr_t* pmd_table = (addr_t*)pud_table[pud];
+  if(pmd_table[pmd] == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return 0;
+  }
+
+  addr_t* pt_table = (addr_t*)pmd_table[pmd];
+  
+  pte = (uint32_t)pt_table[pt];
+
+	pthread_mutex_unlock(&mm->mm_lock);
+
   return pte;
 }
 
@@ -207,12 +247,58 @@ uint32_t pte_get_entry(struct pcb_t *caller, addr_t pgn)
  **/
 int pte_set_entry(struct pcb_t *caller, addr_t pgn, uint32_t pte_val)
 {
-	struct krnl_t *krnl = caller->krnl;
-	krnl->mm->pgd[pgn]=pte_val;
-	
+  addr_t pgd=0;
+  addr_t p4d=0;
+  addr_t pud=0;
+  addr_t pmd=0;
+  addr_t	pt=0;
+
+  struct mm_struct *mm = caller->krnl->mm;
+  pthread_mutex_lock(&mm->mm_lock);
+
+  get_pd_from_pagenum(pgn, &pgd, &p4d, &pud, &pmd, &pt);
+  
+  if(mm->pgd == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return -1;
+  }
+  if(mm->pgd[pgd] == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return -1;
+  }
+
+  addr_t *p4d_table = (addr_t*)mm->pgd[pgd];
+  if(p4d_table[p4d] == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return 0;
+  }
+
+  addr_t* pud_table = (addr_t*)p4d_table[p4d];
+  if(pud_table[pud] == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return 0;
+  }
+  
+  addr_t* pmd_table = (addr_t*)pud_table[pud];
+  if(pmd_table[pmd] == NULL) {
+    pthread_mutex_unlock(&mm->mm_lock);
+    return 0;
+  }
+
+  addr_t* pt_table = (addr_t*)pmd_table[pmd];
+  pt_table[pt] = pte_val;
+
+	pthread_mutex_unlock(&mm->mm_lock);
 	return 0;
 }
 
+static addr_t* alloc_page_table_node() {
+    addr_t* new_table = (addr_t*)malloc(PAGING64_PAGESZ);
+    if (new_table != NULL) {
+        memset(new_table, 0, PAGING64_PAGESZ);
+    }
+    return new_table;
+}
 
 /*
  * vmap_pgd_memset - map a range of page at aligned address
@@ -221,12 +307,39 @@ int vmap_pgd_memset(struct pcb_t *caller,           // process call
                     addr_t addr,                       // start address which is aligned to pagesz
                     int pgnum)                      // num of mapping page
 {
-  //int pgit = 0;
-  //uint64_t pattern = 0xdeadbeef;
-
+  uint32_t pattern = 0xdeadbeef;
+  struct mm_struct *mm = caller->krnl->mm;
   /* TODO memset the page table with given pattern
    */
+  pthread_mutex_lock(&mm->mm_lock);
+  if(mm->pgd == NULL)
+   mm->pgd = alloc_page_table_node();
 
+  for(int i = 0; i < pgnum; i++){
+    addr_t cur_addr = addr + i * PAGING64_PAGESZ;
+    addr_t pgn = cur_addr >> PAGING64_ADDR_PT_LOBIT;
+    addr_t pgd, p4d, pud, pmd, pt;
+    get_pd_from_pagenum(pgn, &pgd, &p4d, &pud, &pmd, &pt);
+
+    if(mm->pgd[pgd] == 0)
+      mm->pgd[pgd] = (addr_t)alloc_page_table_node();
+    addr_t* p4d_table = (addr_t*) mm->pgd[pgd];
+
+    if(p4d_table[p4d] == 0)
+      p4d_table[p4d] = (addr_t)alloc_page_table_node();
+    addr_t* pud_table = (addr_t*)p4d_table[p4d];
+
+    if(pud_table[pud] == 0)
+      pud_table[pud] = (addr_t)alloc_page_table_node();
+    addr_t* pmd_table = (addr_t*)pud_table[pud];
+
+    if(pmd_table[pmd] == 0)
+      pmd_table[pmd] = (addr_t)alloc_page_table_node();
+    addr_t* pt_table = (addr_t*)pmd_table[pmd];
+
+    pt_table[pt] = (addr_t)pattern;
+  }
+  pthread_mutex_unlock(&mm->mm_lock);
   return 0;
 }
 
@@ -382,6 +495,16 @@ int init_mm(struct mm_struct *mm, struct pcb_t *caller)
    //mm->pmd = ...
    //mm->pt = ...
 
+  // Khởi tạo khóa
+  // Cần dùng khóa đệ quy vì các hàm VM thường gọi lồng nhau (nested calls) 
+  pthread_mutexattr_t attr;
+  pthread_mutexattr_init(&attr);
+  pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE_NP);
+  
+  pthread_mutex_init(&mm->mm_lock, &attr);
+  
+  pthread_mutexattr_destroy(&attr);
+  // Kết thúc khởi tạo khóa
 
   /* By default the owner comes with at least one vma */
   vma0->vm_id = 0;
@@ -502,16 +625,42 @@ int print_pgtbl(struct pcb_t *caller, addr_t start, addr_t end)
 //  addr_t pgn_start;//, pgn_end;
 //  addr_t pgit;
 //  struct krnl_t *krnl = caller->krnl;
-
   addr_t pgd=0;
   addr_t p4d=0;
   addr_t pud=0;
   addr_t pmd=0;
   addr_t pt=0;
 
+  struct mm_struct *mm = caller->krnl->mm;
   get_pd_from_address(start, &pgd, &p4d, &pud, &pmd, &pt);
 
   /* TODO traverse the page map and dump the page directory entries */
+
+  printf("print_pgtbl:\n");
+  if (mm->pgd == NULL) {
+    printf(" PGD is NULL.\n");
+    return 0;
+  }
+
+  if (mm->pgd[pgd] != 0) {
+      printf(" PDG=" FORMATX_ADDR, mm->pgd[pgd]);
+  }
+  
+  addr_t* p4d_table = (addr_t*)mm->pgd[pgd];
+  if (p4d_table != NULL && p4d_table[p4d] != 0) {
+      printf(" P4g=" FORMATX_ADDR, p4d_table[p4d]);
+  }
+
+  addr_t* pud_table = (addr_t*)p4d_table[p4d];
+  if (pud_table != NULL && pud_table[pud] != 0) {
+      printf(" PUD=" FORMATX_ADDR, pud_table[pud]);
+  }
+
+  addr_t* pmd_table = (addr_t*)pud_table[pud];
+  if (pmd_table != NULL && pmd_table[pmd] != 0) {
+      printf(" PMD=" FORMATX_ADDR, pmd_table[pmd]);
+  }
+  printf("\n");
 
   return 0;
 }

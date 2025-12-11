@@ -1,5 +1,5 @@
 
-#include "loader.h"
+#include "../include/loader.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,8 +27,8 @@ static enum ins_opcode_t get_opcode(char * opt) {
 	}else if (!strcmp(opt, OPT_SYSCALL)) {
 		return SYSCALL;
 	}else{
-		printf("get_opcode return Opcode: %s\n", opt);
-		exit(1);
+	//	printf("get_opcode return Opcode: %s\n", opt);
+	//	exit(1);
 	}
 }
 
@@ -46,15 +46,20 @@ struct pcb_t * load(const char * path) {
 	FILE * file;
 	if ((file = fopen(path, "r")) == NULL) {
 		printf("Cannot find process description at '%s'\n", path);
-		exit(1);		
+	//	exit(1);		
 	}
+
 	snprintf(proc->path, 2*sizeof(path)+1, "%s", path);
 	char opcode[10];
 	proc->code = (struct code_seg_t*)malloc(sizeof(struct code_seg_t));
-	fscanf(file, "%u %u", &proc->priority, &proc->code->size);
+
+	fscanf(file,"%u %u", &proc->priority, &proc->code->size);
+   
+
 	proc->code->text = (struct inst_t*)malloc(
 		sizeof(struct inst_t) * proc->code->size
 	);
+	
 	uint32_t i = 0;
 	char buf[200];
 	for (i = 0; i < proc->code->size; i++) {
@@ -95,7 +100,7 @@ struct pcb_t * load(const char * path) {
 			break;
 		default:
 			printf("Opcode: %s\n", opcode);
-			exit(1);
+		//	exit(1);
 		}
 	}
 	return proc;

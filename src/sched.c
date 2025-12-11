@@ -8,20 +8,22 @@
  * for the sole purpose of studying while attending the course CO2018.
  */
 
-#include "queue.h"
-#include "sched.h"
+#include "../include/queue.h"
+#include "../include/sched.h"
 #include <pthread.h>
 
 #include <stdlib.h>
 #include <stdio.h>
 static struct queue_t ready_queue;
 static struct queue_t run_queue;
-static pthread_mutex_t queue_lock;
+
+static pthread_mutex_t queue_lock;					//mutual exclusion
 
 static struct queue_t running_list;
+
 #ifdef MLQ_SCHED
-static struct queue_t mlq_ready_queue[MAX_PRIO];
-static int slot[MAX_PRIO];
+static struct queue_t mlq_ready_queue[MAX_PRIO];	//mang cac queue dua vao priority
+static int slot[MAX_PRIO];							//thoi gian max 1 priority duoc chay
 #endif
 
 int queue_empty(void) {
@@ -40,7 +42,7 @@ void init_scheduler(void) {
 
 	for (i = 0; i < MAX_PRIO; i ++) {
 		mlq_ready_queue[i].size = 0;
-		slot[i] = MAX_PRIO - i; 
+		slot[i] = MAX_PRIO - i; 					//priority cang -> thoi gian chay cang lau
 	}
 #endif
 	ready_queue.size = 0;
@@ -59,13 +61,32 @@ void init_scheduler(void) {
 struct pcb_t * get_mlq_proc(void) {
 	struct pcb_t * proc = NULL;
 
-	pthread_mutex_lock(&queue_lock);
+	//1. mutex lock
+	pthread_mutex_lock(&queue_lock);	
+
 	/*TODO: get a process from PRIORITY [ready_queue].
 	 *      It worth to protect by a mechanism.
 	 * */
 
+	//2. scan queue tu priority cao den thap
+	for (int i = 0; i < MAX_PRIO; i++) {
+		if (!empty(&mlq_ready_queue[i])) {	//kiem tra hang doi co rong hay khong
+			if (slot[i] > 0) {				//neu can chay + con slot
+				proc = dequeue(&mlq_ready_queue[i]);
+				slot[i]--;
+				break;
+			} else {						//can chay + het slot
+				slot[i] = MAX_PRIO - i;		
+				//khong break de check priority - 1
+			}
+		}
+	}
+
 	if (proc != NULL)
 		enqueue(&running_list, proc);
+
+	pthread_mutex_unlock(&queue_lock);
+
 	return proc;	
 }
 
@@ -79,8 +100,12 @@ void put_mlq_proc(struct pcb_t * proc) {
 	 * 
 	 */
 
+	//1. mutex lock
 	pthread_mutex_lock(&queue_lock);
+
+	//2. dua vao hang doi
 	enqueue(&mlq_ready_queue[proc->prio], proc);
+	
 	pthread_mutex_unlock(&queue_lock);
 }
 
@@ -93,9 +118,13 @@ void add_mlq_proc(struct pcb_t * proc) {
 	 *       It worth to protect by a mechanism.
 	 * 
 	 */
-       
+	
+	//1. mutex lock
 	pthread_mutex_lock(&queue_lock);
+
+	//2. xep vao hang doi
 	enqueue(&mlq_ready_queue[proc->prio], proc);
+
 	pthread_mutex_unlock(&queue_lock);	
 }
 

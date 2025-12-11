@@ -12,6 +12,7 @@
 #define OSMM_H
 
 #include <stdint.h>
+#include <pthread.h>
 
 #define MM_PAGING
 #define PAGING_MAX_MMSWP 4 /* max number of supported swapped space */
@@ -103,6 +104,9 @@ struct mm_struct {
 
    /* list of free page */
    struct pgn_t *fifo_pgn;
+   // Khóa cho bộ nhớ ảo
+   pthread_mutex_t mm_lock;
+
 };
 
 /*
@@ -128,6 +132,9 @@ struct memphy_struct {
    /* Management structure */
    struct framephy_struct *free_fp_list;
    struct framephy_struct *used_fp_list;
+
+   //khai báo thuộc tính mutex_lock cho memphy, vì có thể nhiều ram, swap
+   pthread_mutex_t memphy_lock;
 };
 
 #endif
