@@ -284,22 +284,28 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
  *@value: value
  *
  */
-int pg_getval(struct mm_struct *mm, int addr, BYTE *data, struct pcb_t *caller)
-{
+int pg_getval(struct mm_struct *mm, int addr, BYTE *data, struct pcb_t *caller) {
+  //giai ma dia chi
   int pgn = PAGING_PGN(addr);
-//  int off = PAGING_OFFST(addr);
+  int off = PAGING_OFFST(addr);
   int fpn;
 
+  //kiem tra xem page co trong ram khong
   if (pg_getpage(mm, pgn, &fpn, caller) != 0)
-    return -1; /* invalid page access */
+    return -1; 
 
-//  int phyaddr = (fpn << PAGING_ADDR_FPN_LOBIT) + off;
+  //tinh dia chi tuyet doi (vat ly)
+  int phyaddr = (fpn << PAGING_ADDR_FPN_LOBIT) + off; 
 
-  /* TODO 
-   *  MEMPHY_read(caller->krnl->mram, phyaddr, data);
-   *  MEMPHY READ 
-   *  SYSCALL 17 sys_memmap with SYSMEM_IO_READ
-   */
+  //syscall -> kernal doc ram vat ly
+  struct sc_regs regs;
+  regs.a1 = SYSMEM_IO_READ; //syscall doc
+  regs.a2 = phyaddr;        //dia chi
+  regs.a3 = 0;              //placeholder
+
+  syscall(caller->krnl, caller->pid, 17, &regs);
+
+  *data = (BYTE)regs.a3; //lay gia tri
 
   return 0;
 }
@@ -310,22 +316,25 @@ int pg_getval(struct mm_struct *mm, int addr, BYTE *data, struct pcb_t *caller)
  *@value: value
  *
  */
-int pg_setval(struct mm_struct *mm, int addr, BYTE value, struct pcb_t *caller)
-{
+int pg_setval(struct mm_struct *mm, int addr, BYTE value, struct pcb_t *caller) {
   int pgn = PAGING_PGN(addr);
-//  int off = PAGING_OFFST(addr);
+  int off = PAGING_OFFST(addr);
   int fpn;
 
-  /* Get the page to MEMRAM, swap from MEMSWAP if needed */
+  //kiem tra xem page co trong ram khong
   if (pg_getpage(mm, pgn, &fpn, caller) != 0)
-    return -1; /* invalid page access */
+    return -1; 
 
+  //tinh dia chi tuyet doi (vat ly)
+  int phyaddr = (fpn << PAGING_ADDR_FPN_LOBIT) + off;
 
-  /* TODO 
-   *  MEMPHY_write(caller->krnl->mram, phyaddr, value);
-   *  MEMPHY WRITE with SYSMEM_IO_WRITE 
-   * SYSCALL 17 sys_memmap
-   */
+  //syscall -> kernal ghi vao ram vat ly
+  struct sc_regs regs;
+  regs.a1 = SYSMEM_IO_WRITE;
+  regs.a2 = phyaddr;
+  regs.a3 = (uint32_t)value;  //gia tri can ghi
+
+  syscall(caller->krnl, caller->pid, 17, &regs);
 
   return 0;
 }
