@@ -467,20 +467,28 @@ int find_victim_page(struct mm_struct *mm, addr_t *retpgn)
 {
   struct pgn_t *pg = mm->fifo_pgn;
 
-  /* TODO: Implement the theorical mechanism to find the victim page */
+  // Case 0: Danh sách rỗng
   if (!pg)
-  {
     return -1;
+
+  // Case 1: Danh sách chỉ có 1 phần tử
+  if (pg->pg_next == NULL) {
+      *retpgn = pg->pgn;
+      mm->fifo_pgn = NULL; // Cập nhật lại head
+      free(pg);
+      return 0;
   }
+
+  // Case 2: Danh sách có >= 2 phần tử -> Tìm đuôi (Tail)
   struct pgn_t *prev = NULL;
   while (pg->pg_next)
   {
     prev = pg;
     pg = pg->pg_next;
   }
+  
   *retpgn = pg->pgn;
-  prev->pg_next = NULL;
-
+  prev->pg_next = NULL; // Cắt đuôi
   free(pg);
 
   return 0;
