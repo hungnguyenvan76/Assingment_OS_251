@@ -214,50 +214,71 @@ printf("%s:%d\n",__func__,__LINE__);
  */
 int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 {
-
   uint32_t pte = pte_get_entry(caller, pgn);
 
-  if (!PAGING_PAGE_PRESENT(pte))
-  { /* Page is not online, make it actively living */
-    addr_t vicpgn, swpfpn;
-//    addr_t vicfpn;
-//    addr_t vicpte;
-//  struct sc_regs regs;
-
-    /* TODO Initialize the target frame storing our variable */
-//  addr_t tgtfpn 
-
-    /* TODO: Play with your paging theory here */
-    /* Find victim page */
-    if (find_victim_page(caller->krnl->mm, &vicpgn) == -1)
-    {
-      return -1;
-    }
-
-    /* Get free frame in MEMSWP */
-    if (MEMPHY_get_freefp(caller->krnl->active_mswp, &swpfpn) == -1)
-    {
-      return -1;
-    }
-
-    /* TODO: Implement swap frame from MEMRAM to MEMSWP and vice versa*/
-
-    /* TODO copy victim frame to swap 
-     * SWP(vicfpn <--> swpfpn)
-     * SYSCALL 1 sys_memmap
-     */
-
-
-    /* Update page table */
-    //pte_set_swap(...);
-
-    /* Update its online status of the target page */
-    //pte_set_fpn(...);
-
-    enlist_pgn_node(&caller->krnl->mm->fifo_pgn, pgn);
+  // Trường hợp 1: Trang đã có trong RAM (Present)
+  if (PAGING_PAGE_PRESENT(pte))
+  {
+      *fpn = PAGING_FPN(pte);
+      return 0;
   }
 
-  *fpn = PAGING_FPN(pte_get_entry(caller,pgn));
+  // Trường hợp 2: Page Fault (Trang không có trong RAM) -> Phải Swap
+  // Chúng ta sẽ lấy một khung trang (frame) từ một trang khác đang ở trong RAM (victim)
+  
+  addr_t vicpgn; // Page number của nạn nhân
+  int vicfpn;    // Frame number của nạn nhân (sẽ lấy cái này cho trang mới)
+  uint32_t vicpte;
+
+  // 1. Tìm nạn nhân để đá ra (Dùng thuật toán FIFO đã viết ở trên)
+  if (find_victim_page(caller->krnl->mm, &vicpgn) < 0)
+  {
+      return -1; // Không tìm được nạn nhân (Lỗi nghiêm trọng)
+  }
+
+  // 2. Lấy thông tin frame của nạn nhân
+  vicpte = pte_get_entry(caller, vicpgn);
+  vicfpn = PAGING_FPN(vicpte);
+
+  // 3. Lấy một slot trống trong ổ đĩa Swap để chứa nạn nhân
+  // Lưu ý: Đề bài yêu cầu lấy từ active_mswp
+  int swpfpn; 
+  if (MEMPHY_get_freefp(caller->krnl->active_mswp, &swpfpn) < 0) {
+      // Nếu ổ Swap đầy -> Không thể swap out -> Lỗi
+      return -1;
+  }
+
+  // 4. THỰC HIỆN SWAP (Giao tiếp với Hardware qua Syscall)
+  // Logic: Copy dữ liệu từ RAM[vicfpn] sang SWAP[swpfpn]
+  // VÀ: Copy dữ liệu từ SWAP[của trang pgn] sang RAM[vicfpn] (Nếu trang pgn đã từng bị swap ra)
+  
+  // Gọi syscall SWAP. Tham số:
+  // a2: Frame trong RAM (vicfpn)
+  // a3: Frame trong Swap (swpfpn)
+  // Lưu ý: syscall này thực hiện __mm_swap_page trong kernel
+  struct sc_regs regs;
+  regs.a1 = SYSMEM_SWP_OP;
+  regs.a2 = vicfpn;
+  regs.a3 = swpfpn; 
+  syscall(caller->krnl, caller->pid, 17, &regs);
+
+
+  // 5. Cập nhật Page Table của NẠN NHÂN (Giờ nó đã ra đảo/swap ở)
+  // Đánh dấu: SWAPPED = 1, PRESENT = 0
+  // Lưu vị trí trên ổ đĩa: SWAP TYPE và SWAP OFFSET
+  pte_set_swap(caller, vicpgn, 0, swpfpn); 
+
+
+  // 6. Cập nhật Page Table của TRANG CẦN DÙNG (Giờ nó đã vào đất liền/RAM)
+  // Đánh dấu: PRESENT = 1, SWAPPED = 0
+  // Gán cho nó cái frame của nạn nhân vừa để lại (vicfpn)
+  pte_set_fpn(caller, pgn, vicfpn);
+
+  // 7. Thêm trang mới vào danh sách FIFO để quản lý cho lần sau
+  enlist_pgn_node(&caller->krnl->mm->fifo_pgn, pgn);
+
+  // 8. Trả về kết quả Frame Number
+  *fpn = vicfpn;
 
   return 0;
 }
