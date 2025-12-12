@@ -425,7 +425,8 @@ addr_t vmap_page_range(struct pcb_t *caller,
  */
 addr_t alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struct **frm_lst)
 {
-  int pgit, fpn;
+  int pgit;
+  addr_t fpn;
   struct framephy_struct *newfp_str;
   struct framephy_struct *last_fp = NULL; 
 
@@ -484,7 +485,7 @@ addr_t alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_st
 
   return 0;
 
-alloc_error:
+alloc_error: {
   struct framephy_struct *temp = *frm_lst;
   while (temp != NULL) {
       struct framephy_struct *next = temp->fp_next;
@@ -494,6 +495,7 @@ alloc_error:
   }
   *frm_lst = NULL;
   return -3000;
+}
 }
 /*
  * vm_map_ram - do the mapping all vm are to ram storage device

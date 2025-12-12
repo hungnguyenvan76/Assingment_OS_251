@@ -230,7 +230,8 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller) {
   vicfpn = PAGING_FPN(vicpte);
 
   //tim slot trong ben Swap
-  int swpfpn; 
+  // --- DA SUA: int -> addr_t ---
+  addr_t swpfpn; 
   if (MEMPHY_get_freefp(caller->krnl->active_mswp, &swpfpn) < 0)
       return -1;
 
@@ -335,7 +336,7 @@ int __read(struct pcb_t *caller, int vmaid, int rgid, addr_t offset, BYTE *data)
     return -1;
   }
 
-  struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
+  //struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
   int ret = pg_getval(caller->krnl->mm, currg->rg_start + offset, data, caller);
 
   pthread_mutex_unlock(&mmvm_lock);

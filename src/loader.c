@@ -27,8 +27,8 @@ static enum ins_opcode_t get_opcode(char * opt) {
 	}else if (!strcmp(opt, OPT_SYSCALL)) {
 		return SYSCALL;
 	}else{
-	//	printf("get_opcode return Opcode: %s\n", opt);
-	//	exit(1);
+		printf("get_opcode return Opcode: %s\n", opt);
+		exit(1);
 	}
 }
 
