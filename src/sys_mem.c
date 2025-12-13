@@ -15,12 +15,12 @@
 #include <stdlib.h>
 
 #ifdef MM64
-#include "../include/mm64.h"
+#include "mm64.h"
 #else
-#include "../include/mm.h"
+#include "mm.h"
 #endif
 
-//typedef char BYTE;
+typedef char BYTE;
 
 int __sys_memmap(struct krnl_t *krnl, uint32_t pid, struct sc_regs* regs)
 {

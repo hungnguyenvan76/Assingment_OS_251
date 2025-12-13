@@ -10,11 +10,9 @@
  
  /* NOTICE this moudle is deprecated in LamiaAtrium release
   *        the structure is maintained for future 64bit-32bit
-  *        backward compatible feature or PAE feature 
+  *        backward compatible feature or PAE feature 
   */
-
-// BỎ FILE NÀY
-
+ 
 #include "../include/mm.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -269,13 +267,13 @@ int print_list_vma(struct vm_area_struct *ivma)
 
 int print_list_pgn(struct pgn_t *ip)
 {
-  printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
+ // printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
   return 0;
 }
 
 int print_pgtbl(struct pcb_t *caller, uint32_t start, uint32_t end)
 {
-  printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
+  //printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
   return 0;
 }
 

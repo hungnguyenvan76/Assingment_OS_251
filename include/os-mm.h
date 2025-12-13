@@ -13,7 +13,6 @@
 
 #include <stdint.h>
 #include <pthread.h>
-
 #define MM_PAGING
 #define PAGING_MAX_MMSWP 4 /* max number of supported swapped space */
 #define PAGING_MAX_SYMTBL_SZ 30
@@ -59,6 +58,8 @@ struct vm_rg_struct {
    addr_t rg_end;
 
    struct vm_rg_struct *rg_next;
+      pthread_mutex_t mm_lock;
+
 };
 
 /*
@@ -77,6 +78,8 @@ struct vm_area_struct {
    struct mm_struct *vm_mm;
    struct vm_rg_struct *vm_freerg_list;
    struct vm_area_struct *vm_next;
+   pthread_mutex_t mm_lock;
+
 };
 
 /* 
@@ -104,8 +107,7 @@ struct mm_struct {
 
    /* list of free page */
    struct pgn_t *fifo_pgn;
-   // Khóa cho bộ nhớ ảo
-   pthread_mutex_t mm_lock;
+      pthread_mutex_t mm_lock;
 
 };
 
@@ -118,6 +120,8 @@ struct framephy_struct {
 
    /* Resereed for tracking allocated framed */
    struct mm_struct* owner;
+      pthread_mutex_t mm_lock;
+
 };
 
 struct memphy_struct {
@@ -132,9 +136,10 @@ struct memphy_struct {
    /* Management structure */
    struct framephy_struct *free_fp_list;
    struct framephy_struct *used_fp_list;
-
-   //khai báo thuộc tính mutex_lock cho memphy, vì có thể nhiều ram, swap
    pthread_mutex_t memphy_lock;
+   pthread_mutex_t mm_lock;
+
+
 };
 
 #endif

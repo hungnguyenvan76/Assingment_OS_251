@@ -670,48 +670,58 @@ int print_list_vma(struct vm_area_struct *ivma)
  */
 int print_pgtbl(struct pcb_t *caller, addr_t start, addr_t end)
 {
-//  addr_t pgn_start;//, pgn_end;
-//  addr_t pgit;
-//  struct krnl_t *krnl = caller->krnl;
-  addr_t pgd=0;
-  addr_t p4d=0;
-  addr_t pud=0;
-  addr_t pmd=0;
-  addr_t pt=0;
-
+  int i, j, k, l, m; 
   struct mm_struct *mm = caller->krnl->mm;
-  get_pd_from_address(start, &pgd, &p4d, &pud, &pmd, &pt);
 
-  /* TODO traverse the page map and dump the page directory entries */
+  if (!mm || !mm->pgd) {
+      printf("print_pgtbl: PGD is NULL\n"); 
+      return 0;
+  }
 
   printf("print_pgtbl:\n");
-  if (mm->pgd == NULL) {
-    printf(" PGD is NULL.\n");
-    return 0;
-  }
 
-  if (mm->pgd[pgd] != 0) {
-      printf(" PDG=" FORMATX_ADDR, mm->pgd[pgd]);
-  }
-  
-  addr_t* p4d_table = (addr_t*)mm->pgd[pgd];
-  if (p4d_table != NULL && p4d_table[p4d] != 0) {
-      printf(" P4g=" FORMATX_ADDR, p4d_table[p4d]);
-  }
+  // 1. Duyệt PGD
+  for (i = 0; i < 512; i++) {
+    if (mm->pgd[i] == 0) continue;
+    addr_t *p4d_base = (addr_t *)mm->pgd[i];
+    
+    // 2. Duyệt P4D
+    for (j = 0; j < 512; j++) {
+      if (p4d_base[j] == 0) continue;
+      addr_t *pud_base = (addr_t *)p4d_base[j];
+      
+      // 3. Duyệt PUD
+      for (k = 0; k < 512; k++) {
+        if (pud_base[k] == 0) continue;
+        addr_t *pmd_base = (addr_t *)pud_base[k];
+        
+        // 4. Duyệt PMD
+        for (l = 0; l < 512; l++) {
+          if (pmd_base[l] == 0) continue;
+          addr_t *pt_base = (addr_t *)pmd_base[l];
 
-  addr_t* pud_table = (addr_t*)p4d_table[p4d];
-  if (pud_table != NULL && pud_table[pud] != 0) {
-      printf(" PUD=" FORMATX_ADDR, pud_table[pud]);
-  }
+          // 5. Duyệt PT (Page Table) - Chứa PTE
+          for (m = 0; m < 512; m++) {
+            if (pt_base[m] == 0) continue; 
 
-  addr_t* pmd_table = (addr_t*)pud_table[pud];
-  if (pmd_table != NULL && pmd_table[pmd] != 0) {
-      printf(" PMD=" FORMATX_ADDR, pmd_table[pmd]);
+            uint32_t pte = (uint32_t)pt_base[m]; 
+            
+            // [CẬP NHẬT] Thêm Off=%03x (chính là biến m)
+            // m là index trong bảng PT (tương ứng với offset trang ảo)
+            printf("\tPDG=%016llx P4g=%016llx PUD=%016llx PMD=%016llx PTE=%08x\n",
+                   (uint64_t)mm->pgd[i],    
+                   (uint64_t)p4d_base[j],   
+                   (uint64_t)pud_base[k],   
+                   (uint64_t)pmd_base[l],
+                   pte,
+                  m); // <--- In ra offset m (0 -> 511)
+          }
+        }
+      }
+    }
   }
-  printf("\n");
 
   return 0;
 }
 
-
-#endif // defined(MM64)
+#endif // defined(MM64)      pte_set_entry(caller, i, 0);

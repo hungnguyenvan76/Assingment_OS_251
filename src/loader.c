@@ -27,7 +27,7 @@ static enum ins_opcode_t get_opcode(char * opt) {
 	}else if (!strcmp(opt, OPT_SYSCALL)) {
 		return SYSCALL;
 	}else{
-		printf("get_opcode return Opcode: %s\n", opt);
+	//	printf("get_opcode return Opcode: %s\n", opt);
 		exit(1);
 	}
 }
@@ -46,7 +46,7 @@ struct pcb_t * load(const char * path) {
 	FILE * file;
 	if ((file = fopen(path, "r")) == NULL) {
 		printf("Cannot find process description at '%s'\n", path);
-	//	exit(1);		
+		exit(1);		
 	}
 
 	snprintf(proc->path, 2*sizeof(path)+1, "%s", path);
@@ -100,7 +100,7 @@ struct pcb_t * load(const char * path) {
 			break;
 		default:
 			printf("Opcode: %s\n", opcode);
-		//	exit(1);
+			exit(1);
 		}
 	}
 	return proc;

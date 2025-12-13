@@ -25,8 +25,6 @@
 
 #include "common.h"
 
-//static pthread_mutex_t mmvm_lock = PTHREAD_MUTEX_INITIALIZER;
-
 /*enlist_vm_freerg_list - add new rg to freerg_list
  *@mm: memory region
  *@rg_elmt: new region
@@ -70,10 +68,11 @@ struct vm_rg_struct *get_symrg_byid(struct mm_struct *mm, int rgid)
  *
  */
 int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *alloc_addr) {
+  // Dùng recursive lock nên lock thoải mái
   pthread_mutex_lock(&caller->krnl->mm->mm_lock);
   struct vm_rg_struct rgnode;
 
-  //Tai su dung
+  // 1. Tái sử dụng vùng nhớ đã free (nếu có)
   if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0) {
     caller->krnl->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
     caller->krnl->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
@@ -83,26 +82,31 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *allo
     return 0;
   }
 
-  //Neu khong co -> mo rong bo nho
+  // 2. Nếu không có -> Mở rộng bộ nhớ (Heap growth)
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
   
-  //Tinh toan kich thuoc can mo rong
+  // Tính toán kích thước cần mở rộng (làm tròn theo Page)
   int inc_sz = PAGING_PAGE_ALIGNSZ(size); 
   
+  // Lấy vị trí sbrk hiện tại (đây là điểm bắt đầu cho vùng nhớ mới)
   int old_sbrk = cur_vma->sbrk; 
 
-  //goi system call -> kernal mo rong
+  // Gọi system call -> kernel cấp thêm Frame vật lý tương ứng
   struct sc_regs regs;
   regs.a1 = SYSMEM_INC_OP; 
   regs.a2 = vmaid;
   regs.a3 = inc_sz;        
   syscall(caller->krnl, caller->pid, 17, &regs);
 
-  //cap nhat bang ky hieu cho vung nho moi
+  // Cập nhật bảng ký hiệu cho vùng nhớ mới
   caller->krnl->mm->symrgtbl[rgid].rg_start = old_sbrk;
   caller->krnl->mm->symrgtbl[rgid].rg_end = old_sbrk + size;
 
   *alloc_addr = old_sbrk;
+
+  // [FIX 1 - QUAN TRỌNG] CẬP NHẬT CON TRỎ SBRK
+  // Tăng sbrk lên để lần alloc tiếp theo không bị trùng địa chỉ cũ
+  cur_vma->sbrk += inc_sz;
 
   pthread_mutex_unlock(&caller->krnl->mm->mm_lock);
   return 0;
@@ -116,33 +120,61 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *allo
  *
  */
 int __free(struct pcb_t *caller, int vmaid, int rgid) {
+  // Giữ lock từ đầu đến cuối hàm. Vì init_mm dùng PTHREAD_MUTEX_RECURSIVE_NP
+  // nên không lo deadlock khi gọi các hàm con (pte_...) cũng dùng lock này.
   pthread_mutex_lock(&caller->krnl->mm->mm_lock);
-  //kiem tra dau vao
+
+  // Kiem tra dau vao
   if (rgid < 0 || rgid > PAGING_MAX_SYMTBL_SZ) {
     pthread_mutex_unlock(&caller->krnl->mm->mm_lock);
     return -1;
   }
 
-  //lay thong tin vung nho tu ID
+  // Lay thong tin vung nho tu ID
   struct vm_rg_struct *rgnode = get_symrg_byid(caller->krnl->mm, rgid);
   
-  //kiem tra xem da cap phat chua
+  // Kiem tra xem da cap phat chua
   if (rgnode->rg_start == 0 && rgnode->rg_end == 0) {
     pthread_mutex_unlock(&caller->krnl->mm->mm_lock);
     return -1;
   }
 
-  //tao node moi de luu
+  // [FIX 2] XÓA DỮ LIỆU VẬT LÝ VÀ PTE TRƯỚC KHI TRẢ VỀ LOGIC
+  // Mục đích: Để print_pgtbl không in ra các trang này nữa
+  int pgn_start = PAGING_PGN(rgnode->rg_start);
+  int pgn_end = PAGING_PGN(rgnode->rg_end);
+
+  for (int i = pgn_start; i < pgn_end; i++) {
+      uint32_t pte = pte_get_entry(caller, i);
+
+      // Nếu trang đang ở RAM -> Trả Frame RAM
+      if (PAGING_PAGE_PRESENT(pte)) {
+          int fpn = PAGING_FPN(pte);
+          MEMPHY_put_freefp(caller->krnl->mram, fpn);
+      } 
+      // Nếu trang đang ở Swap -> Trả Frame Swap
+      // (Lưu ý: Hãy đảm bảo macro PAGING_PAGE_SWAPPED có trong mm.h, nếu không dùng PAGING_PTE_SWAPPED_MASK)
+      else if (PAGING_PTE_SWP(pte)) {
+          int swpfpn = PAGING_SWP(pte);
+          MEMPHY_put_freefp(caller->krnl->active_mswp, swpfpn);
+      }
+
+      // QUAN TRỌNG: Xóa PTE về 0 để hàm in bảng trang bỏ qua
+      pte_set_entry(caller, i, 0);
+  }
+
+  // [PHẦN CŨ] Xử lý danh sách logic (Logical Free)
+  // Tao node moi de luu vao danh sach Free (để tái sử dụng Logic)
   struct vm_rg_struct *freerg_node = malloc(sizeof(struct vm_rg_struct));
   freerg_node->rg_start = rgnode->rg_start;
   freerg_node->rg_end = rgnode->rg_end;
   
-  //chen vao dau danh sach
+  // Chen vao dau danh sach Free Region
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
   freerg_node->rg_next = cur_vma->vm_freerg_list;
   cur_vma->vm_freerg_list = freerg_node;
 
-  //xoa thong tin so huu
+  // Xoa thong tin so huu trong bang ky hieu
   rgnode->rg_start = 0;
   rgnode->rg_end = 0;
   rgnode->rg_next = NULL;
@@ -159,7 +191,7 @@ int __free(struct pcb_t *caller, int vmaid, int rgid) {
 int liballoc(struct pcb_t *proc, addr_t size, uint32_t reg_index)
 {
   addr_t  addr;
-
+  
   int val = __alloc(proc, 0, reg_index, size, &addr);
   if (val == -1)
   {
@@ -184,12 +216,13 @@ int liballoc(struct pcb_t *proc, addr_t size, uint32_t reg_index)
 
 int libfree(struct pcb_t *proc, uint32_t reg_index)
 {
+  // printf("libfree %d \n", reg_index);
   int val = __free(proc, 0, reg_index);
   if (val == -1)
   {
     return -1;
   }
-printf("%s:%d\n",__func__,__LINE__);
+  // printf("%s:%d\n", __func__, __LINE__);
 #ifdef IODUMP
   /* TODO dump IO content (if needed) */
 #ifdef PAGETBL_DUMP
@@ -229,7 +262,6 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller) {
   vicfpn = PAGING_FPN(vicpte);
 
   //tim slot trong ben Swap
-  // --- DA SUA: int -> addr_t ---
   addr_t swpfpn; 
   if (MEMPHY_get_freefp(caller->krnl->active_mswp, &swpfpn) < 0)
       return -1;
@@ -327,7 +359,6 @@ int __read(struct pcb_t *caller, int vmaid, int rgid, addr_t offset, BYTE *data)
 {
   struct vm_rg_struct *currg = get_symrg_byid(caller->krnl->mm, rgid);
   pthread_mutex_lock(&caller->krnl->mm->mm_lock);
-//  struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
 
   /* TODO Invalid memory identify */
   if (currg == NULL) {
@@ -335,7 +366,6 @@ int __read(struct pcb_t *caller, int vmaid, int rgid, addr_t offset, BYTE *data)
     return -1;
   }
 
-  //struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
   int ret = pg_getval(caller->krnl->mm, currg->rg_start + offset, data, caller);
 
   pthread_mutex_unlock(&caller->krnl->mm->mm_lock);
@@ -350,6 +380,7 @@ int libread(
     uint32_t* destination)
 {
   BYTE data;
+  // printf("Read data at %ls \n", destination + offset);
   int val = __read(proc, 0, source, offset, &data);
 
   *destination = data;
@@ -373,6 +404,7 @@ int libread(
  */
 int __write(struct pcb_t *caller, int vmaid, int rgid, addr_t offset, BYTE value)
 {
+  // printf("libwrite at %ld + offset %ld with %ld \n", rgid, offset, value);
   pthread_mutex_lock(&caller->krnl->mm->mm_lock);
   struct vm_rg_struct *currg = get_symrg_byid(caller->krnl->mm, rgid);
 
@@ -525,5 +557,3 @@ int get_free_vmrg_area(struct pcb_t *caller, int vmaid, int size, struct vm_rg_s
 
   return -1; //duyet het nhung khong con cho trong
 }
-
-// #endif
