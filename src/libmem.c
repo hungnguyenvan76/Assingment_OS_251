@@ -25,7 +25,7 @@
 
 #include "common.h"
 
-static pthread_mutex_t mmvm_lock = PTHREAD_MUTEX_INITIALIZER;
+//static pthread_mutex_t mmvm_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /*enlist_vm_freerg_list - add new rg to freerg_list
  *@mm: memory region
@@ -70,7 +70,7 @@ struct vm_rg_struct *get_symrg_byid(struct mm_struct *mm, int rgid)
  *
  */
 int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *alloc_addr) {
-  pthread_mutex_lock(&mmvm_lock); //lock 
+  pthread_mutex_lock(&caller->krnl->mm->mm_lock);
   struct vm_rg_struct rgnode;
 
   //Tai su dung
@@ -79,7 +79,7 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *allo
     caller->krnl->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
     *alloc_addr = rgnode.rg_start;
 
-    pthread_mutex_unlock(&mmvm_lock);
+    pthread_mutex_unlock(&caller->krnl->mm->mm_lock);
     return 0;
   }
 
@@ -104,7 +104,7 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *allo
 
   *alloc_addr = old_sbrk;
 
-  pthread_mutex_unlock(&mmvm_lock);
+  pthread_mutex_unlock(&caller->krnl->mm->mm_lock);
   return 0;
 }       
 
@@ -116,11 +116,10 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *allo
  *
  */
 int __free(struct pcb_t *caller, int vmaid, int rgid) {
-  pthread_mutex_lock(&mmvm_lock); //lock
-
+  pthread_mutex_lock(&caller->krnl->mm->mm_lock);
   //kiem tra dau vao
   if (rgid < 0 || rgid > PAGING_MAX_SYMTBL_SZ) {
-    pthread_mutex_unlock(&mmvm_lock);
+    pthread_mutex_unlock(&caller->krnl->mm->mm_lock);
     return -1;
   }
 
@@ -129,7 +128,7 @@ int __free(struct pcb_t *caller, int vmaid, int rgid) {
   
   //kiem tra xem da cap phat chua
   if (rgnode->rg_start == 0 && rgnode->rg_end == 0) {
-    pthread_mutex_unlock(&mmvm_lock);
+    pthread_mutex_unlock(&caller->krnl->mm->mm_lock);
     return -1;
   }
 
@@ -148,7 +147,7 @@ int __free(struct pcb_t *caller, int vmaid, int rgid) {
   rgnode->rg_end = 0;
   rgnode->rg_next = NULL;
 
-  pthread_mutex_unlock(&mmvm_lock);
+  pthread_mutex_unlock(&caller->krnl->mm->mm_lock);
   return 0;
 }
 
@@ -327,19 +326,19 @@ int pg_setval(struct mm_struct *mm, int addr, BYTE value, struct pcb_t *caller) 
 int __read(struct pcb_t *caller, int vmaid, int rgid, addr_t offset, BYTE *data)
 {
   struct vm_rg_struct *currg = get_symrg_byid(caller->krnl->mm, rgid);
-  pthread_mutex_lock(&mmvm_lock);
+  pthread_mutex_lock(&caller->krnl->mm->mm_lock);
 //  struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
 
   /* TODO Invalid memory identify */
   if (currg == NULL) {
-    pthread_mutex_unlock(&mmvm_lock);
+    pthread_mutex_unlock(&caller->krnl->mm->mm_lock);
     return -1;
   }
 
   //struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
   int ret = pg_getval(caller->krnl->mm, currg->rg_start + offset, data, caller);
 
-  pthread_mutex_unlock(&mmvm_lock);
+  pthread_mutex_unlock(&caller->krnl->mm->mm_lock);
   return ret;
 }
 
@@ -374,20 +373,20 @@ int libread(
  */
 int __write(struct pcb_t *caller, int vmaid, int rgid, addr_t offset, BYTE value)
 {
-  pthread_mutex_lock(&mmvm_lock);
+  pthread_mutex_lock(&caller->krnl->mm->mm_lock);
   struct vm_rg_struct *currg = get_symrg_byid(caller->krnl->mm, rgid);
 
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
 
   if (currg == NULL || cur_vma == NULL) /* Invalid memory identify */
   {
-    pthread_mutex_unlock(&mmvm_lock);
+    pthread_mutex_unlock(&caller->krnl->mm->mm_lock);
     return -1;
   }
 
   pg_setval(caller->krnl->mm, currg->rg_start + offset, value, caller);
 
-  pthread_mutex_unlock(&mmvm_lock);
+  pthread_mutex_unlock(&caller->krnl->mm->mm_lock);
   return 0;
 }
 
@@ -420,7 +419,7 @@ int libwrite(
  */
 int free_pcb_memph(struct pcb_t *caller)
 {
-  pthread_mutex_lock(&mmvm_lock);
+  pthread_mutex_lock(&caller->krnl->mm->mm_lock);
   int pagenum, fpn;
   uint32_t pte;
 
@@ -440,7 +439,7 @@ int free_pcb_memph(struct pcb_t *caller)
     }
   }
 
-  pthread_mutex_unlock(&mmvm_lock);
+  pthread_mutex_unlock(&caller->krnl->mm->mm_lock);
   return 0;
 }
 
