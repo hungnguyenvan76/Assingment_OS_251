@@ -172,8 +172,6 @@ int pte_set_fpn(struct pcb_t *caller, addr_t pgn, addr_t fpn)
   addr_t pgd_idx = 0, p4d_idx = 0, pud_idx = 0, pmd_idx = 0, pt_idx = 0;
   int ret = 0;
 
-  // LOCK
-  pthread_mutex_lock(&mm->mm_lock);
   
 #ifdef MM64 
   get_pd_from_pagenum(pgn, &pgd_idx, &p4d_idx, &pud_idx, &pmd_idx, &pt_idx);
@@ -226,8 +224,7 @@ int pte_set_fpn(struct pcb_t *caller, addr_t pgn, addr_t fpn)
   SETVAL(*pte, fpn, PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
 
 done:
-  // UNLOCK
-  pthread_mutex_unlock(&mm->mm_lock);
+
   return ret;
 }
 
