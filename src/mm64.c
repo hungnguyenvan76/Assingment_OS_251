@@ -171,7 +171,7 @@ int pte_set_fpn(struct pcb_t *caller, addr_t pgn, addr_t fpn)
   addr_t *pte;
   addr_t pgd_idx = 0, p4d_idx = 0, pud_idx = 0, pmd_idx = 0, pt_idx = 0;
   int ret = 0;
-
+  pthread_mutex_lock(&mm->mm_lock);
   
 #ifdef MM64 
   get_pd_from_pagenum(pgn, &pgd_idx, &p4d_idx, &pud_idx, &pmd_idx, &pt_idx);
@@ -224,7 +224,7 @@ int pte_set_fpn(struct pcb_t *caller, addr_t pgn, addr_t fpn)
   SETVAL(*pte, fpn, PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
 
 done:
-
+  pthread_mutex_unlock(&mm->mm_lock);
   return ret;
 }
 
@@ -574,6 +574,15 @@ int init_mm(struct mm_struct *mm, struct pcb_t *caller)
   }
 
   mm->fifo_pgn = NULL;
+
+  pthread_mutexattr_t attr;
+  pthread_mutexattr_init(&attr);
+  // khoi tao RECURSIVE lock
+  pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE_NP); 
+
+  pthread_mutex_init(&mm->mm_lock, &attr); 
+
+  pthread_mutexattr_destroy(&attr);
 
   return 0;
 }
