@@ -20,7 +20,7 @@ MAKE_CMD = $(CC) $(INC)
 
 # Object files
 MEM_OBJ = $(addprefix $(OBJ)/, paging.o mem.o cpu.o loader.o)
-SYSCALL_OBJ = $(addprefix $(OBJ)/, syscall.o sys_mem.o sys_listsyscall.o)
+SYSCALL_OBJ = $(addprefix $(OBJ)/, syscall.o sys_mem.o sys_listsyscall.o sys_xxxhandler.o)
 
 # Danh sách các file object cần biên dịch
 # Lưu ý: Cả mm.o và mm64.o đều được liệt kê, nhưng nhờ cờ -DMM64:
