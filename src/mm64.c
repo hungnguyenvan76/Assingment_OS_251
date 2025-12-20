@@ -708,11 +708,11 @@ int print_pgtbl(struct pcb_t *caller, addr_t start, addr_t end)
             
             // [CẬP NHẬT] Thêm Off=%03x (chính là biến m)
             // m là index trong bảng PT (tương ứng với offset trang ảo)
-            printf("\tPDG=%016llx P4g=%016llx PUD=%016llx PMD=%016llx PTE=%08x\n",
-                   (uint64_t)mm->pgd[i],    
-                   (uint64_t)p4d_base[j],   
-                   (uint64_t)pud_base[k],   
-                   (uint64_t)pmd_base[l],
+            printf("\tPDG=%016llx P4g=%016llx PUD=%016llx PMD=%016llx PTE=%08x Off=%03x\n",
+                   (unsigned long long)mm->pgd[i],    
+                   (unsigned long long)p4d_base[j],   
+                   (unsigned long long)pud_base[k],   
+                   (unsigned long long)pmd_base[l],
                    pte,
                   m); // <--- In ra offset m (0 -> 511)
           }
