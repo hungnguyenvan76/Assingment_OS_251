@@ -13,12 +13,17 @@
 
 #include <stdint.h>
 #include <pthread.h>
+
 #define MM_PAGING
 #define PAGING_MAX_MMSWP 4 /* max number of supported swapped space */
 #define PAGING_MAX_SYMTBL_SZ 30
 
-/* 
- * @bksysnet: in long address mode of 64bit or original 32bit
+/* * Forward declaration for PCB to avoid circular dependency 
+ * (Khai báo trước cấu trúc pcb_t để dùng trong pgn_t)
+ */
+struct pcb_t; 
+
+/* * @bksysnet: in long address mode of 64bit or original 32bit
  * the address type need to be redefined
  */
 
@@ -33,9 +38,8 @@ typedef ADDR_TYPE addr_t;
 //typedef unsigned int uint32_t;
 
 
-/* 
- * @bksysnet: the format string need to be redefined
- *            based on the address mode
+/* * @bksysnet: the format string need to be redefined
+ * based on the address mode
  */
 #ifdef MM64
 #define FORMAT_ADDR "%ld"
@@ -45,25 +49,28 @@ typedef ADDR_TYPE addr_t;
 #define FORMATX_ADDR "%08x"
 #endif
 
+/* * [FIXED] Added owner field for Global Replacement Algorithm 
+ */
 struct pgn_t{
    addr_t pgn;
    struct pgn_t *pg_next; 
+   struct pcb_t *owner; // <--- THÊM DÒNG NÀY (Lưu chủ sở hữu trang)
 };
 
 /*
- *  Memory region struct
+ * Memory region struct
  */
 struct vm_rg_struct {
    addr_t rg_start;
    addr_t rg_end;
 
    struct vm_rg_struct *rg_next;
-      pthread_mutex_t mm_lock;
+   pthread_mutex_t mm_lock; // Move mutex inside struct definition properly
 
 };
 
 /*
- *  Memory area struct
+ * Memory area struct
  */
 struct vm_area_struct {
    unsigned long vm_id;
@@ -82,13 +89,12 @@ struct vm_area_struct {
 
 };
 
-/* 
- * Memory management struct
+/* * Memory management struct
  */
 struct mm_struct {
  /* TODO: The structure of page diractory need to be justify
-  *       as your design. The single point is draft to avoid
-  *       compiler noisy only, this design need to be revised
+  * as your design. The single point is draft to avoid
+  * compiler noisy only, this design need to be revised
   */
 #ifdef MM64
    addr_t *pgd;
@@ -107,7 +113,7 @@ struct mm_struct {
 
    /* list of free page */
    struct pgn_t *fifo_pgn;
-      pthread_mutex_t mm_lock;
+   pthread_mutex_t mm_lock;
 
 };
 
@@ -120,7 +126,7 @@ struct framephy_struct {
 
    /* Resereed for tracking allocated framed */
    struct mm_struct* owner;
-      pthread_mutex_t mm_lock;
+   pthread_mutex_t mm_lock;
 
 };
 

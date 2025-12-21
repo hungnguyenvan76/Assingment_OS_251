@@ -65,7 +65,7 @@ struct vm_rg_struct *get_vm_area_node_at_brk(struct pcb_t *caller, int vmaid, ad
 {
   struct vm_rg_struct * newrg;
   /* TODO retrive current vma to obtain newrg, current comment out due to compiler redundant warning*/
-  struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
+  struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
 
   /* TODO: update the newrg boundary
   // newrg->rg_start = ...
@@ -97,7 +97,7 @@ int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, addr_t vmastart, a
     return -1;
   }
 
-  struct vm_area_struct *vma = caller->krnl->mm->mmap;
+  struct vm_area_struct *vma = caller->mm->mmap;
   if (vma == NULL)
   {
     return -1;
@@ -105,7 +105,7 @@ int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, addr_t vmastart, a
 
   /* TODO validate the planned memory area is not overlapped */
 
-  struct vm_area_struct *cur_area = get_vma_by_num(caller->krnl->mm, vmaid);
+  struct vm_area_struct *cur_area = get_vma_by_num(caller->mm, vmaid);
   if (cur_area == NULL)
   {
     return -1;
@@ -137,7 +137,7 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, addr_t inc_sz)
   /* TOTO with new address scheme, the size need tobe aligned 
   *      the raw inc_sz maybe not fit pagesize
   */
-  struct vm_area_struct * cur_area = get_vma_by_num(caller->krnl->mm, vmaid);
+  struct vm_area_struct * cur_area = get_vma_by_num(caller->mm, vmaid);
   #ifdef MM64
   int pagesz = PAGING64_PAGESZ; // 4096 bytes
   #else

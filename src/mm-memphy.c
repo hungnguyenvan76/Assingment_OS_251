@@ -50,13 +50,11 @@ int MEMPHY_seq_read(struct memphy_struct *mp, addr_t addr, BYTE *value)
 {
    if (mp == NULL)
       return -1;
-
    if (!mp->rdmflg)
       return -1; /* Not compatible mode for sequential read */
 
    MEMPHY_mv_csr(mp, addr);
    *value = (BYTE)mp->storage[addr];
-
    return 0;
 }
 
@@ -171,7 +169,6 @@ int MEMPHY_get_freefp(struct memphy_struct *mp, addr_t *retfpn)
       pthread_mutex_unlock(&mp->memphy_lock);
       return -1;
    }
-   
    *retfpn = fp->fpn;
    mp->free_fp_list = fp->fp_next;
 
@@ -190,6 +187,16 @@ int MEMPHY_dump(struct memphy_struct *mp)
   /*TODO dump memphy contnt mp->storage
    *     for tracing the memory content
    */
+   printf("===== PHYSICAL MEMORY DUMP =====\n");
+   printf("masz : %d \n",mp->maxsz);
+   uint32_t* word_storage = (uint32_t*)mp->storage;
+   int i;
+   for (i = 0; i < mp->maxsz / 4; i++){
+      if (word_storage[i] != 0)
+      printf("BYTE %08x: %d\n", i * 4, word_storage[i]);
+	}
+   printf("===== PHYSICAL MEMORY END-DUMP =====\n");
+   
    return 0;
 }
 

@@ -104,44 +104,51 @@ static void * cpu_routine(void * args) {
 
 static void * ld_routine(void * args) {
 #ifdef MM_PAGING
-	struct memphy_struct* mram = ((struct mmpaging_ld_args *)args)->mram;
-	struct memphy_struct** mswp = ((struct mmpaging_ld_args *)args)->mswp;
-	struct memphy_struct* active_mswp = ((struct mmpaging_ld_args *)args)->active_mswp;
-	struct timer_id_t * timer_id = ((struct mmpaging_ld_args *)args)->timer_id;
+    struct memphy_struct* mram = ((struct mmpaging_ld_args *)args)->mram;
+    struct memphy_struct** mswp = ((struct mmpaging_ld_args *)args)->mswp;
+    struct memphy_struct* active_mswp = ((struct mmpaging_ld_args *)args)->active_mswp;
+    struct timer_id_t * timer_id = ((struct mmpaging_ld_args *)args)->timer_id;
 #else
-	struct timer_id_t * timer_id = (struct timer_id_t*)args;
+    struct timer_id_t * timer_id = (struct timer_id_t*)args;
 #endif
-	int i = 0;
-	printf("ld_routine\n");
-	while (i < num_processes) {
-		struct pcb_t * proc = load(ld_processes.path[i]);
-		struct krnl_t * krnl = proc->krnl = &os;	
+    int i = 0;
+    printf("ld_routine\n");
+
+    // [FIX] Khởi tạo cấu trúc quản lý bộ nhớ của Kernel MỘT LẦN DUY NHẤT
+    // Vì 'os' là biến toàn cục, ta nên khởi tạo nó trước khi load process đầu tiên
+#ifdef MM_PAGING
+    struct mm_struct *global_mm = malloc(sizeof(struct mm_struct));
+    init_mm(global_mm, NULL); // Init cho Kernel, không cần caller cụ thể
+#endif
+
+    while (i < num_processes) {
+        struct pcb_t * proc = load(ld_processes.path[i]);
+        struct krnl_t * krnl = proc->krnl = &os;
 
 #ifdef MLQ_SCHED
-		proc->prio = ld_processes.prio[i];
+        proc->prio = ld_processes.prio[i];
 #endif
-		while (current_time() < ld_processes.start_time[i]) {
-			next_slot(timer_id);
-		}
+        while (current_time() < ld_processes.start_time[i]) {
+            next_slot(timer_id);
+        }
 #ifdef MM_PAGING
-		krnl->mm = malloc(sizeof(struct mm_struct));
-		init_mm(krnl->mm, proc);
-		krnl->mram = mram;
-		krnl->mswp = mswp;
-		krnl->active_mswp = active_mswp;
+        krnl->mm = global_mm;
+        krnl->mram = mram;
+        krnl->mswp = mswp;
+        krnl->active_mswp = active_mswp;
 #endif
-		printf("\tLoaded a process at %s, PID: %d PRIO: %ld\n",
-			ld_processes.path[i], proc->pid, ld_processes.prio[i]);
-		add_proc(proc);
-		free(ld_processes.path[i]);
-		i++;
-		next_slot(timer_id);
-	}
-	free(ld_processes.path);
-	free(ld_processes.start_time);
-	done = 1;
-	detach_event(timer_id);
-	pthread_exit(NULL);
+        printf("\tLoaded a process at %s, PID: %d PRIO: %ld\n",
+            ld_processes.path[i], proc->pid, ld_processes.prio[i]);
+        add_proc(proc);
+        free(ld_processes.path[i]);
+        i++;
+        next_slot(timer_id);
+    }
+    free(ld_processes.path);
+    free(ld_processes.start_time);
+    done = 1;
+    detach_event(timer_id);
+    pthread_exit(NULL);
 }
 
 static void read_config(const char * path) {
@@ -246,7 +253,7 @@ int main(int argc, char * argv[]) {
 	mm_ld_args->mram = (struct memphy_struct *) &mram;
 	mm_ld_args->mswp = (struct memphy_struct**) &mswp;
 	mm_ld_args->active_mswp = (struct memphy_struct *) &mswp[0];
-        mm_ld_args->active_mswp_id = 0;
+    mm_ld_args->active_mswp_id = 0;
 #endif
 
 	/* Init scheduler */

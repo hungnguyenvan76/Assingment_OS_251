@@ -5,7 +5,7 @@
 
 /* CPU Bus definition */
 #define PAGING_CPU_BUS_WIDTH 22 /* 22bit bus - MAX SPACE 4MB */
-#define PAGING_PAGESZ  256      /* 256B or 8-bits PAGE NUMBER */
+#define PAGING_PAGESZ  4096      /* 256B or 8-bits PAGE NUMBER */
 #define PAGING_MEMRAMSZ BIT(21)
 #define PAGING_PAGE_ALIGNSZ(sz) (DIV_ROUND_UP(sz,PAGING_PAGESZ)*PAGING_PAGESZ)
 
@@ -101,10 +101,13 @@
 /* VM region prototypes */
 struct vm_rg_struct * init_vm_rg(addr_t rg_start, addr_t rg_end);
 int enlist_vm_rg_node(struct vm_rg_struct **rglist, struct vm_rg_struct* rgnode);
-int enlist_pgn_node(struct pgn_t **pgnlist, addr_t pgn);
 int vmap_pgd_memset(struct pcb_t *caller, addr_t addr, int pgnum);
-addr_t vmap_page_range(struct pcb_t *caller, addr_t addr, int pgnum, 
-                    struct framephy_struct *frames, struct vm_rg_struct *ret_rg);
+addr_t vmap_page_range(struct pcb_t *caller,
+                      addr_t addr,
+                      int pgnum,
+                      struct framephy_struct *frames,
+                      struct vm_rg_struct *ret_rg);
+
 addr_t vm_map_ram(struct pcb_t *caller, addr_t astart, addr_t aend, addr_t mapstart, int incpgnum, struct vm_rg_struct *ret_rg);
 addr_t alloc_pages_range(struct pcb_t *caller, int incpgnum, struct framephy_struct **frm_lst);
 int __swap_cp_page(struct memphy_struct *mpsrc, addr_t srcfpn,
@@ -146,8 +149,10 @@ struct vm_rg_struct * get_symrg_byid(struct mm_struct* mm, int rgid);
 int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, addr_t vmastart, addr_t vmaend);
 int get_free_vmrg_area(struct pcb_t *caller, int vmaid, int size, struct vm_rg_struct *newrg);
 int inc_vma_limit(struct pcb_t *caller, int vmaid, addr_t inc_sz);
-int find_victim_page(struct mm_struct* mm, addr_t *pgn);
+int find_victim_page(struct mm_struct *mm, int *retpgn, struct pcb_t **ret_owner);
+
 struct vm_area_struct *get_vma_by_num(struct mm_struct *mm, int vmaid);
+int enlist_pgn_node(struct pgn_t **plist, int pgn, struct pcb_t *owner);
 
 /* MEM/PHY protypes */
 int MEMPHY_get_freefp(struct memphy_struct *mp, addr_t *fpn);
